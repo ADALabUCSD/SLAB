@@ -12,7 +12,27 @@ All directories follow an identical configuration. Each directory consists of tw
 
 ### Configure Cluster Node(s)
 
-All tests are designed to run on Ubuntu 16.04. The disk image used to create cluster nodes is available [here](http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img). An automated script for creating a cluster on top of OpenStack with all tools installed is available [here](https://github.com/thomas9t/spark-openstack). To prepare a single node cluster, simply run the script `/config/setup-nodes.sh`. The script will download and install dependencies. We recommend creating a VM, or a fresh instance in your favorite cluster manager and simply running the config script rather than trying to install dependencies manually. The `/conf` directories for our Spark and Hadoop clusters are available under the `/configs` folder of this repository. The testing environment assumes the following (see the tech report for versions of software):
+#### Using the AWS AMI
+
+We have released an AWS AMI based on Ubuntu 16.04 with all dependencies pre-installed. The AMI is available here. You can use this AMI to run tests in the singlenode setting or create your own cluster. A couple relevant pieces of information:
+
+1. You will need to configure Spark and Haddop to run on your cluster. The AMI has them set up to run in single node mode. There are many online tutorials explaining how to do this.
+2. We have built Greenplum using six segments. If using in the single node setting you will likely want to increase this to 16-24 (we use 24) depending on the number of cores on your machine. To do so you can use the `gpexpand` command line utility. This utility can be used to expand Greenplum to new nodes as well. Consult the documentation available [here](http://gpdb.docs.pivotal.io/520/utility_guide/admin_utilities/gpexpand.html).
+3. If you wish to see the specific configuration settings we used for Spark and Hadoop (hdfs), the configuration directories we used are available as zip files in the `/config/` subfolder of this repository.
+
+#### Building From Source
+
+If you don't want to use the provided AMI, you can create a fresh cluster using the compilation scripts provided in `/config`. First run `setup-nodes.sh`. This script will install software and perform basic system configuration. The script takes the following parameters in the form of environment variables
+
+1. `COMPILE_OPENBLAS=1` - Set this environment variable to compile OpenBLAS from source. If this variable is unset then OpenBLAS will be installed from `apt-get`
+2. `INSTALL_TENSORFLOW=1` - Set this environment variable to install TensorFlow. If this variable is unset then TensorFlow will not be installed.
+3. `COMPILE_SPARK=1` - Set this environment variable to download Spark and compile from Source. Spark will be compiled to support linking OpenBLAS. If this variable unset then we assume you will download and install your own version of Spark.
+
+After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum database. The script will create a user `ubuntu` and a corresponding databas. Finally run `install-madlib.sh` to download and install MADLib. Greenplum will be installed with six segments. You will need to `gpexpand` Greenplum if you wish to use more segments or extend Greenplum to more nodes. 
+
+All tests are designed to run on Ubuntu 16.04. The disk image used to create cluster nodes is available [here](http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img). An automated script for creating a cluster on top of OpenStack with all tools installed is available [here](https://github.com/thomas9t/spark-openstack). To prepare a single node cluster, simply run the script `/config/setup-nodes.sh`. The script will download and install dependencies.
+
+For the intrepid used who wishes to go it alone setting up the testing environment we assume the following (see the tech report for all versions of software used):
 
 1. Spark and Hadoop are installed and their respective `/bin` directories are on the system `PATH`.
 2. Greenplum is installed and accepting connections on port `5432` (the default). We used Greenplum for all tests although they -should- also work with vanilla Postgres.
