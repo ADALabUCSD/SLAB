@@ -17,7 +17,7 @@ All tests are designed to run on Ubuntu 16.04. The disk image used to create clu
 1. Spark and Hadoop are installed and their respective `/bin` directories are on the system `PATH`.
 2. Greenplum is installed and accepting connections on port `5432` (the default). We used Greenplum for all tests although they -should- also work with vanilla Postgres.
 3. MADLib has been installed and loaded into the RDBMS.
-3. Scripts assume the existance of a user and database `ubuntu` in the RDBMS.
+3. **Scripts assume the existance of a user and database `ubuntu` in the RDBMS.**
 4. Python has been installed along with Pandas, NumPy, psycopg2, gslab_econ, and TensorFlow. All such packages can be installed through PiP.
 5. R has been installed along with the pbdDMAT package (and its dependencies) and OpenMPI
 6. OpenBLAS has been installed (either through apt-get or from sources) and can be loaded by R.
@@ -38,12 +38,12 @@ Tests expect that data has been pre-generated and loaded into HDFS/Greenplum. Fo
 
 ### Run Tests
 
-TODO
+Running tests is very straightforward! Just `cd` to the appropriate directory and run `make.py`. Each system will do its thing and log runtimes to the test directory's `/output` subfolder. It should be clear from filenames which log corresponds to each test. As before each `make.py` script takes command line arguments which can be used to adjust the parameters of each test. Use `python make.py -h` to see the specific options supported by each script.  
 
-#### Output File Format
+## Details
 
-TODO
+Most support and utility code lives in the `/lib` subfolder of this repository. The programs likely to be of interest are:
 
-## Utility Code
-
-TODO
+1. `gen_data.py` - Contains routines used to generate synthetic data.
+2. `sql_cxn.py` - Contains a class which makes interacting with Greenplum over Python more pleasant.
+3. `make_utils.py` - Contains the code used by `make.py` files.
