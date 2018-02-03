@@ -22,7 +22,7 @@ We have released an AWS AMI based on Ubuntu 16.04 with all dependencies pre-inst
 
 #### Building From Source
 
-If you don't want to use the provided AMI, you can create a fresh cluster using the compilation scripts provided in `/config`. First run `setup-nodes.sh`. This script will install software and perform basic system configuration. The script takes the following parameters in the form of environment variables
+If you don't want to use the provided AMI, you can create a fresh cluster using the compilation scripts provided in `/config`. Be aware that the provided scripts will install some packages from 3rd party Ubuntu repos. These are all legit (e.g. Rstudio and SBT) but if you're suspicious of such things you may want to comment out these lines and install on your own. First run `setup-nodes.sh`. This script will install software and perform basic system configuration. The script takes the following parameters in the form of environment variables
 
 1. `COMPILE_OPENBLAS=1` - Set this environment variable to compile OpenBLAS from source. If this variable is unset then OpenBLAS will be installed from `apt-get`
 2. `INSTALL_TENSORFLOW=1` - Set this environment variable to install TensorFlow. If this variable is unset then TensorFlow will not be installed.
