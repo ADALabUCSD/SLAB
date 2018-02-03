@@ -1,0 +1,33 @@
+time = externalFunction(Integer i) return (Double B)
+       implemented in (classname="org.apache.sysml.udf.lib.TimeWrapper", exectype="mem");
+t = time(1);
+print("Time: " + t);
+
+genClusters = function(Integer nClust,
+                       Integer nObs,
+                       Integer nCol,
+                       Double sd,
+                       Double sep) return (matrix[double] X) {
+    print("Hi from utils")
+    X = sample(nClust, nObs, TRUE)%*%matrix(sep, rows = 1, cols = nCol)
+    X = X + rand(rows = nObs, cols = nCol, pdf = 'normal')
+    print(sum(X))
+}
+
+allocMatrix = function(Integer rows, Integer cols) return (matrix[double] X) {
+    X = rand(rows = rows, cols = cols, pdf = 'uniform')
+    print(sum(X))
+}
+
+printRandElements = function(matrix[double] M, Integer numel) {
+    for (ix in 1:numel) {
+        r = rand(rows=1,cols=1,min=1,max=nrow(M),pdf="uniform")
+        row = as.integer(as.scalar(r))
+
+        c = rand(rows=1,cols=1,min=1,max=ncol(M),pdf="uniform")
+        col = as.integer(as.scalar(c))
+        tmp = M[row,col]
+        print(as.scalar(tmp))
+    }
+}
+

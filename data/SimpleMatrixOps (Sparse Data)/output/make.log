@@ -1,0 +1,47 @@
+
+<<<<<<< HEAD
+ make.py started: 2017-12-31 05:05:35 /home/ubuntu/benchmark/data/SimpleMatrixOps (Sparse Data)/src 
+
+
+
+hdfs dfs -copyFromLocal -f "../output/M_01100_sparse_wide.mtx" /scratch//M_01100_sparse_wide.mtx
+
+hdfs dfs -copyFromLocal -f "../output/M_1100_sparse_wide.mtx" /scratch//M_1100_sparse_wide.mtx
+
+hdfs dfs -copyFromLocal -f "../output/M_11_sparse_wide.mtx" /scratch//M_11_sparse_wide.mtx
+
+hdfs dfs -copyFromLocal -f "../output/w_01100_sparse.mtx" /scratch//w_01100_sparse.mtx
+
+=======
+ make.py started: 2017-12-31 05:03:30 /home/ubuntu/benchmark/data/SimpleMatrixOps (Sparse Data)/src 
+
+
+
+>>>>>>> 76d2a3c332747f0b31067daa7db53c24d4a1df12
+hdfs dfs -copyFromLocal -f "../output/M_01100_sparse_tall.mtx" /scratch//M_01100_sparse_tall.mtx
+
+hdfs dfs -copyFromLocal -f "../output/N_01100_sparse_tall.mtx" /scratch//N_01100_sparse_tall.mtx
+
+hdfs dfs -copyFromLocal -f "../output/N_11_sparse_tall.mtx" /scratch//N_11_sparse_tall.mtx
+
+<<<<<<< HEAD
+hdfs dfs -copyFromLocal -f "../output/w_11_sparse.mtx" /scratch//w_11_sparse.mtx
+
+hdfs dfs -copyFromLocal -f "../output/M_1100_sparse_tall.mtx" /scratch//M_1100_sparse_tall.mtx
+
+hdfs dfs -copyFromLocal -f "../output/M_11_sparse_tall.mtx" /scratch//M_11_sparse_tall.mtx
+
+ make.py ended: 2017-12-31 05:18:50
+=======
+hdfs dfs -copyFromLocal -f "../output/M_11_sparse_wide.mtx" /scratch//M_11_sparse_wide.mtx
+
+hdfs dfs -copyFromLocal -f "../output/w_11_sparse.mtx" /scratch//w_11_sparse.mtx
+
+hdfs dfs -copyFromLocal -f "../output/w_01100_sparse.mtx" /scratch//w_01100_sparse.mtx
+
+hdfs dfs -copyFromLocal -f "../output/M_01100_sparse_wide.mtx" /scratch//M_01100_sparse_wide.mtx
+
+hdfs dfs -copyFromLocal -f "../output/M_11_sparse_tall.mtx" /scratch//M_11_sparse_tall.mtx
+
+ make.py ended: 2017-12-31 05:07:09
+>>>>>>> 76d2a3c332747f0b31067daa7db53c24d4a1df12

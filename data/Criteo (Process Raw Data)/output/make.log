@@ -1,0 +1,185 @@
+
+<<<<<<< HEAD
+ make.py started: 2017-12-19 21:15:37 /home/ubuntu/benchmark/data/Criteo (Process Raw Data)/src 
+=======
+ make.py started: 2017-12-19 05:58:57 /home/ubuntu/benchmark/data/Criteo (Process Raw Data)/src 
+>>>>>>> aed9a4a498520d899ecfbc10242b10c1ec4ff57e
+
+
+name := "SparkDataCleaner"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq (
+    "org.apache.spark" %% "spark-core" % "2.1.0" % "provided",  
+    "org.apache.spark" %% "spark-streaming" % "2.1.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "2.1.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./spark/src/main/scala/preclean.scala
+================================================================================
+import sys.process._
+import java.io.File
+import java.io.PrintWriter
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.PipelineModel
+import org.apache.spark.ml.PipelineStage
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.sql.types._
+import org.apache.spark.ml.feature._
+import org.apache.spark.sql.functions._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.ml.linalg._
+import org.apache.spark.mllib.util.MLUtils
+import org.apache.hadoop.fs.{FileSystem, Path}
+
+object SparkPreclean {
+    def main(args: Array[String]) {
+        val path = args(0)
+        val sparse_flag = (args.size > 1)
+        val spark = SparkSession.builder.getOrCreate()
+
+        val raw_df = preclean(spark, path, sparse_flag)
+        encode_features(raw_df, sparse_flag)
+    }
+
+    def preclean(spark: SparkSession,
+                 path: String,
+                 sparse_flag: Boolean) : DataFrame = {
+
+        val path_stub = sys.env("SAVE_STUB")
+        val continuous_cols = (0 to 13).map(
+            x => StructField(s"V${x}", IntegerType))
+        val categorical_cols = (14 to 39).map(
+            x => StructField(s"V${x}", StringType))
+        val schema = StructType(continuous_cols ++ categorical_cols)
+
+        var cols_to_drop = ((11 to 14) ++ (20 to 39)).map(x => s"V${x}")
+        if (!sparse_flag)
+            cols_to_drop = (14 to 39).map(x => s"V${x}")
+
+        // NOTE: Probably not a good idea for real analysis!!!
+        // but saves us some hassle when downloading data...
+        val mv_map = ((1 to 10).map(x => s"V${x}" -> 1) ++
+                      (15 to 19).map(x => s"V${x}" -> "NA")).toMap
+
+        val raw_df = spark.read.option("sep", "\t").
+                                schema(schema).
+                                csv(path).
+                                drop(cols_to_drop: _*).
+                                na.fill(mv_map).withColumnRenamed(
+                                    "V0", "y"
+                                )
+
+        raw_df.persist(MEMORY_AND_DISK_SER)
+        return raw_df
+    }
+
+    def encode_features(df: DataFrame,
+                        sparse_flag: Boolean) {
+
+        // They're called dummy variables not "one hot encodings"
+        val path_stub = sys.env("SAVE_STUB")
+        val cat_col_names = (15 to 19).map(x => s"V${x}")
+
+        val indexers = cat_col_names.map(
+                col => new StringIndexer().
+                               setInputCol(col).
+                               setOutputCol(s"${col}_ix")
+            )
+
+        val encoders = cat_col_names.map(
+                col => new OneHotEncoder().
+                        setInputCol(s"${col}_ix").
+                        setOutputCol(s"${col}_vect")
+            )
+
+        val assemble_base = (1 to 10).map(x => s"V${x}").toArray
+        val assemble_cat = (15 to 19).map(x => s"V${x}_vect").toArray
+
+        val dense_assembler = new VectorAssembler().
+                setInputCols(assemble_base).
+                setOutputCol("dense_features")
+        val sparse_assembler = new VectorAssembler().
+                setInputCols(assemble_cat).
+                setOutputCol("cat_features")
+        val scalar = new StandardScaler().
+            setInputCol("dense_features").
+            setOutputCol("dense_features_scaled")
+        val assembler = new VectorAssembler().
+            setInputCols(Array("dense_features_scaled",
+                               "cat_features")).
+            setOutputCol("features")
+
+        val pipeline_stages = sparse_flag match {
+            case true => (indexers ++ encoders).toArray ++
+                         Array(dense_assembler,
+                               sparse_assembler,
+                               scalar,
+                               assembler)
+            case _    => Array(dense_assembler, scalar)
+        }
+
+        val transform_pipeline = new Pipeline().setStages(pipeline_stages)
+        val model: PipelineModel = transform_pipeline.fit(df)
+        val transformed: DataFrame = model.transform(df)
+
+        //always write dense features
+        transformed.select("y","dense_features_scaled").
+            write.mode("overwrite").
+            parquet(s"/scratch/adclick_clean${path_stub}_dense.parquet")
+
+        if (sparse_flag) {
+            val varnames = Array("y", "dense_features_scaled") ++ cat_col_names
+            transformed.select(varnames.head, varnames.tail: _*).
+                write.mode("overwrite").
+                parquet(s"/scratch/adclick_clean${path_stub}_raw.parquet")
+
+            transformed.select("y","features").
+                write.mode("overwrite").
+                parquet(s"/scratch/adclick_clean${path_stub}_sparse.parquet")
+        }
+    }
+}
+
+Running: spark-submit --class SparkPreclean   ./spark/target/scala-2.10/SparkDataCleaner-assembly-0.1.jar /scratch/day_1.gz true
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+<<<<<<< HEAD
+ make.py ended: 2017-12-19 23:15:15
+=======
+ make.py ended: 2017-12-19 09:07:07
+>>>>>>> aed9a4a498520d899ecfbc10242b10c1ec4ff57e

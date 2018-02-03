@@ -1,0 +1,126 @@
+
+<<<<<<< HEAD
+ make.py started: 2017-12-24 17:55:38 /home/ubuntu/benchmark/data/SimpleMatrixOps (Disk Data)/src 
+
+
+
+hdfs dfs -copyFromLocal -f "../output/N4_tall.csv" /scratch//N4_tall.csv
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+ make.py started: 2017-12-23 02:41:24 /home/ubuntu/benchmark/data/SimpleMatrixOps (Disk Data)/src 
+
+
+
+ make.py ended: 2017-12-23 03:52:54
+=======
+ make.py started: 2017-12-23 02:46:29 /home/ubuntu/benchmark/data/SimpleMatrixOps (Disk Data)/src 
+
+
+
+ make.py ended: 2017-12-23 02:59:28
+>>>>>>> 56aff4553cdeefb2bba9feffd8a2d3722805ade2
+=======
+<<<<<<< HEAD
+ make.py started: 2017-12-23 02:10:29 /home/ubuntu/benchmark/data/SimpleMatrixOps (Disk Data)/src 
+>>>>>>> ad769c9c7619cb62860ca98e36b29959bc39a888
+
+hdfs dfs -copyFromLocal -f ../output/N4_tall.csv.mtd /scratch//N4_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/w_test_tall.csv" /scratch//w_test_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/w_test_tall.csv.mtd /scratch//w_test_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M_test_tall.csv" /scratch//M_test_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/M_test_tall.csv.mtd /scratch//M_test_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/N8_tall.csv" /scratch//N8_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/N8_tall.csv.mtd /scratch//N8_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/N2_tall.csv" /scratch//N2_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/N2_tall.csv.mtd /scratch//N2_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/y4_tall.csv" /scratch//y4_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/y4_tall.csv.mtd /scratch//y4_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/w4_tall.csv" /scratch//w4_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/w4_tall.csv.mtd /scratch//w4_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M2_wide.csv" /scratch//M2_wide.csv
+
+hdfs dfs -copyFromLocal -f ../output/M2_wide.csv.mtd /scratch//M2_wide.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M4_tall.csv" /scratch//M4_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/M4_tall.csv.mtd /scratch//M4_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M_test_wide.csv" /scratch//M_test_wide.csv
+
+hdfs dfs -copyFromLocal -f ../output/M_test_wide.csv.mtd /scratch//M_test_wide.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/N16_tall.csv" /scratch//N16_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/N16_tall.csv.mtd /scratch//N16_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/y_test_tall.csv" /scratch//y_test_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/y_test_tall.csv.mtd /scratch//y_test_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/y8_tall.csv" /scratch//y8_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/y8_tall.csv.mtd /scratch//y8_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/w2_tall.csv" /scratch//w2_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/w2_tall.csv.mtd /scratch//w2_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/y2_tall.csv" /scratch//y2_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/y2_tall.csv.mtd /scratch//y2_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M16_wide.csv" /scratch//M16_wide.csv
+
+hdfs dfs -copyFromLocal -f ../output/M16_wide.csv.mtd /scratch//M16_wide.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/y16_tall.csv" /scratch//y16_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/y16_tall.csv.mtd /scratch//y16_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/N_test_tall.csv" /scratch//N_test_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/N_test_tall.csv.mtd /scratch//N_test_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M16_tall.csv" /scratch//M16_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/M16_tall.csv.mtd /scratch//M16_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M2_tall.csv" /scratch//M2_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/M2_tall.csv.mtd /scratch//M2_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M4_wide.csv" /scratch//M4_wide.csv
+
+hdfs dfs -copyFromLocal -f ../output/M4_wide.csv.mtd /scratch//M4_wide.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/w16_tall.csv" /scratch//w16_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/w16_tall.csv.mtd /scratch//w16_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M8_tall.csv" /scratch//M8_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/M8_tall.csv.mtd /scratch//M8_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/w8_tall.csv" /scratch//w8_tall.csv
+
+hdfs dfs -copyFromLocal -f ../output/w8_tall.csv.mtd /scratch//w8_tall.csv.mtd
+
+hdfs dfs -copyFromLocal -f "../output/M8_wide.csv" /scratch//M8_wide.csv
+
+hdfs dfs -copyFromLocal -f ../output/M8_wide.csv.mtd /scratch//M8_wide.csv.mtd
+
+ make.py ended: 2017-12-24 19:11:35

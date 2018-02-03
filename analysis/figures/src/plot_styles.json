@@ -1,0 +1,80 @@
+{
+    "systemml": {
+        "pretty-name": "SystemML",
+        "color": "blue",
+        "lty": [4, 2, 1, 2, 1, 2],
+        "pty": "s"
+    },
+    "R": {
+        "pretty-name": "R",
+        "color": "darkgreen",
+        "lty": [1, 2, 4, 2, 4, 2],
+        "pty": "*"
+    },
+    "mllib": {
+        "pretty-name": "MLLib",
+        "color": "red",
+        "lty": [4, 2, 4, 2, 1, 2],
+        "pty": "d"
+    },
+    "madlib": {
+        "pretty-name": "MADLib",
+        "color": "indigo",
+        "lty": [4, 2, 4, 2, 4, 2],
+        "pty": "^"
+    },
+    "systemml_driver_native": {
+        "pretty-name": "SystemML (Hybrid Native)",
+        "color": "blue",
+        "lty": [4, 2, 1, 2, 1, 2],
+        "pty": "P"
+    },
+    "systemml_spark_native": {
+        "pretty-name": "SystemML (Spark Native)",
+        "color": "blue",
+        "lty": [4, 2, 1, 2, 1, 2],
+        "pty": "H"
+    },
+    "np": {
+        "pretty-name": "NumPy",
+        "color": "purple",
+        "lty": [1,2,4,2,4,2],
+        "pty": "P"
+    },
+    "tf": {
+        "pretty-name": "TensorFlow",
+        "color": "maroon",
+        "lty": [4, 2, 4, 2, 1, 2],
+        "pty": "o"
+    },
+    "mllib_native": {
+        "pretty-name": "MLLib (Native)",
+        "color": "red",
+        "lty": [4, 2, 4, 2, 1, 2],
+        "pty": "d"
+    },
+    "madlib_native": {
+        "pretty-name": "MADLib (Native)",
+        "color": "indigo",
+        "lty": [4, 2, 4, 2, 4, 2],
+        "pty": "^"
+    },
+    "mllib_la": {
+        "pretty-name": "MLLib (LA)",
+        "color": "red",
+        "lty": [4, 2, 4, 2, 1, 2],
+        "pty": "o"
+    },
+    "madlib_la": {
+        "pretty-name": "MADLib (LA)",
+        "color": "indigo",
+        "lty": [4, 2, 4, 2, 4, 2],
+        "pty": "8"
+    },
+    "systemml_la": {
+        "pretty-name": "SystemML",
+        "color": "blue",
+        "lty": [4, 2, 1, 2, 1, 2],
+        "pty": "s"
+    }
+}

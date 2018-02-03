@@ -1,0 +1,112 @@
+
+ make.py started: 2017-12-22 05:12:16 /home/ubuntu/benchmark/data/Criteo (Build Derived Tables)/src 
+
+
+name := "SparkDataCleaner"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq (
+    "org.apache.spark" %% "spark-core" % "2.1.0" % "provided",  
+    "org.apache.spark" %% "spark-streaming" % "2.1.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "2.1.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import argparse
+
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
+
+sys.path.append(os.path.join(ROOT,'lib','python'))
+import make_utils as utils
+from sql_cxn import SQLCxn
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--stub', default='_sample', type=str)
+parser.add_argument('--sparse', default=True, type=bool)
+
+def main(argv):
+    cxn = SQLCxn(timeout=None, username='ubuntu', db='ubuntu')
+#    coalesce_files(argv.stub, argv.sparse)
+    process_madlib(argv.stub, argv.sparse, cxn)
+
+def coalesce_files(stub, sparse_flag):
+    hdfs_dir = '/scratch/adclick_clean{}_dense.csv'.format(stub)
+    outfile  = '../output/adclick_clean{}_dense.csv'.format(stub)
+    utils.coalesce_hdfs_files(hdfs_dir, outfile)
+
+    hdfs_dir = '/scratch/adclick_clean{}_y.csv'.format(stub)
+    outfile  = '../output/adclick_clean{}_y.csv'.format(stub)
+    utils.coalesce_hdfs_files(hdfs_dir, outfile)
+
+    if sparse_flag:
+        hdfs_dir = '/scratch/adclick_clean{}_sparse.mtx'.format(stub)
+        outfile  = '../output/adclick_clean{}_sparse.mtx'.format(stub)
+        utils.coalesce_hdfs_files(hdfs_dir, outfile)
+
+        hdfs_dir = '/scratch/adclick_clean{}_raw.csv'.format(stub)
+        outfile  = '../output/adclick_clean{}_raw.csv'.format(stub)
+        utils.coalesce_hdfs_files(hdfs_dir, outfile)
+
+def process_madlib(stub, sparse_flag, cxn):
+    cxn.load_dense_matrix('../output/adclick_clean{}_dense.csv'.format(stub),
+                          'adclick_clean{}_dense'.format(stub))
+    
+    if not cxn.table_exists('adclick_clean_vectors_split'):
+        shape = cxn.get_shape_dense('adclick_clean{}_dense'.format(stub))
+        stmt = """
+            CREATE TABLE adclick_clean_vectors_split AS (
+                SELECT row_num, val[1]::INTEGER y, val[2:{}]::NUMERIC[] indep_vars
+                  FROM adclick_clean{}_dense
+            ) DISTRIBUTED BY (row_num)
+        """.format(shape[1], stub)
+        cxn.execute(stmt)
+
+    if sparse_flag:
+        cxn.load_sparse_matrix(
+            '../output/adclick_clean{}_sparse.mtx'.format(stub),
+            'adclick_clean{}_sparse'.format(stub))
+
+
+if __name__ == '__main__':
+    argv = parser.parse_args()
+    main(argv)
+
+Running: python _postprocess.py --sparse True --stub _1
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+ make.py ended: 2017-12-22 06:34:24
