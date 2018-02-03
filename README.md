@@ -10,7 +10,7 @@ The Scalable Linear Algebra Benchmark
 
 All directories follow an identical configuration. Each directory consists of two folders: `src` and `output`. `src` contains all code for that directory and `output` contains output (mostly logs) produced by code in `src`. Each `src` folder contains a script `make.py` which will run all code for that directory. `make.py` often requires command line arguments which can be used to control which tests are run, what datasets are used, etc... To see the command line arguments needed by a particular `make.py` simply run `python make.py -h` and a help message will be printed explain what options are required/present. By default, `make.py` does not capture the `stdout` and `stderr` of child processes. It is often useful to log `stdout` and `stderr`. To do so, simply pipe the output of `make.py` to a log file: `unbuffer python make.py <options> 2>&1 | tee make.out`.
 
-### Configure Cluster Node(s)
+### (1) Configure Cluster Node(s)
 
 #### Using the AWS AMI
 
@@ -43,11 +43,11 @@ For the intrepid used who wishes to go it alone setting up the testing environme
 6. OpenBLAS has been installed (either through apt-get or from sources) and can be loaded by R.
 7. Scala and SBT are installed 
 
-### NFS Share Relevant Directories
+### (2) NFS Share Relevant Directories
 
 pbdR expects that all code files are available to each local R process at run time. Ensure that the directory containing the `SLAB` repo has been NFS shared to all nodes in the cluster along with the directory containing the pbdR library. For example, if the path to `my_test.R` on the master node is `/home/me/SLAB/tests/mytest.R`, then NFS share `SLAB` to `/home/me` on worker nodes in the cluster.
 
-### Generate Test Data
+### (3) Generate Test Data
 
 Tests expect that data has been pre-generated and loaded into HDFS/Greenplum. Fortunately, we have provided scripts which automate this process. There are four directories which manage building data. As described above, each contains a `make.py` which will build that directory. The make file will handle generating data to your specifications as well as loading it into Greenplum and HDFS. Note that data generators use SQL internally so it's important to have one installed and configured as described above even if you don't want to run any of the MADLib tests. 
 
@@ -56,7 +56,7 @@ Tests expect that data has been pre-generated and loaded into HDFS/Greenplum. Fo
  3. `/data/SimpleMatrixOps (Disk Data)` - This directory generates dense synthetic datasets to use for experiments. The make file takes an option which can be used to stiplate the approximate size of data generated. Note that sizes are calculated somewhat unrealisitically assuming that each double uses exactly 8 bytes. The size of files generated is also larger on disk, so generating a matrix with an approximate size of 16GB will result in a matrix on disk which is about 30GB. 
  4. `/data/SimpleMatrixOps (Sparse Data)` - This directory generates sparse synthetic data in `i,j,v` format. The make file for this directory takes two options which can set the *logical* size of matrices generated (e.g. 100GB if fully materialized with zeros on disk) and the fraction of values which are nonzero. Again, run the make file with the `-h` flag to see the appropriate syntax.
 
-### Run Tests
+### (4) Run Tests
 
 Running tests is very straightforward! Just `cd` to the appropriate directory and run `make.py`. Each system will do its thing and log runtimes to the test directory's `/output` subfolder. It should be clear from filenames which log corresponds to each test. As before each `make.py` script takes command line arguments which can be used to adjust the parameters of each test. Use `python make.py -h` to see the specific options supported by each script.  
 
