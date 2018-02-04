@@ -14,11 +14,7 @@ All directories follow an identical configuration. Each directory consists of tw
 
 #### Using the AWS AMI
 
-System setup is a laborious and not very fun process. We have released an AWS AMI based on Ubuntu 16.04 with all dependencies pre-installed. Unless you have a strong reason not to - you are advised to use this AMI. The AMI is available [here](http://souchong.ucsd.edu/slab_ami.ami). You can use this AMI to run tests in the singlenode setting or create your own cluster. A couple relevant pieces of information:
-
-1. You will need to configure Spark and Haddop to run on your cluster. The AMI has them set up to run in single node mode. There are many online tutorials explaining how to do this.
-2. We have built Greenplum using six segments. If using in the single node setting you will likely want to increase this to 16-24 (we use 24) depending on the number of cores on your machine. To do so you can use the `gpexpand` command line utility. This utility can be used to expand Greenplum to new nodes as well. Consult the documentation available [here](http://gpdb.docs.pivotal.io/520/utility_guide/admin_utilities/gpexpand.html).
-3. If you wish to see the specific configuration settings we used for Spark and Hadoop (hdfs), the configuration directories we used are available as zip files in the `/config/` subfolder of this repository.
+System setup is a laborious and not very fun process. We have released an AWS AMI based on Ubuntu 16.04 with all dependencies pre-installed. Unless you have a strong reason not to - you are advised to use this AMI. The AMI is available [here](http://souchong.ucsd.edu/slab_ami.ami). You can use this AMI to run tests in the singlenode setting or create your own cluster. A couple relevant pieces of information.
 
 #### Building From Source
 
@@ -48,13 +44,27 @@ For the intrepid used who wishes to go it alone setting up the testing environme
 4. Python has been installed along with Pandas, NumPy, psycopg2, gslab_econ, and TensorFlow. All such packages can be installed through PiP.
 5. R has been installed along with the pbdDMAT package (and its dependencies) and OpenMPI
 6. OpenBLAS has been installed (either through apt-get or from sources) and can be loaded by R.
-7. Scala and SBT are installed 
+7. Scala and SBT are installed
+8. System Parameters have been configured as described in 
 
-### (2) NFS Share Relevant Directories
+### (2) Additional System Configuration
+
+Some additional manual  configuration steps are necessary to replicate our testing environment.
+
+1. You will need to configure Spark and Haddop to run on your cluster. The AMI has them set up to run in single node mode. There are many online tutorials explaining how to do this. Our configuration directories are available under the `/config` folder of this repo. You can tweak them to suit the resources available on your system.
+2. We have built Greenplum using six segments. If using in the single node setting you will likely want to increase this to 16-24 (we use 24) depending on the number of cores on your machine. To do so you can use the `gpexpand` command line utility. This utility can be used to expand Greenplum to new nodes as well. Consult the documentation available [here](http://gpdb.docs.pivotal.io/520/utility_guide/admin_utilities/gpexpand.html).
+3. If you wish to see the specific configuration settings we used for Spark and Hadoop (hdfs), the configuration directories we used are available as zip files in the `/config/` subfolder of this repository.
+4. You may need to modify some system level parameters in `/etc/security/limits.conf` and `/etc/sysctl.conf` to ensure your system is properly configured. We have provided our versions of these files in the `/config` directory of this repo. You can modify them based on the resources available to you.
+5. If you wish to run tests which compare results for varying numbers of Greenplum segments you will need to manually create new Greenplum database instances and import data. Our test scripts assume that the Greenplum master directory is named according to: `/gpsegs/gpdb-<num_segments>/master/gpseg-1` and that instances are bound to ports under the following mapping:
+
+    {'1': 5481, '2': 6431, '4': 6431, 
+     '8': 6431, '16': 6431, '24': 5432}
+
+### (3) NFS Share Relevant Directories
 
 pbdR expects that all code files are available to each local R process at run time. Ensure that the directory containing the `SLAB` repo has been NFS shared to all nodes in the cluster along with the directory containing the pbdR library. For example, if the path to `my_test.R` on the master node is `/home/me/SLAB/tests/mytest.R`, then NFS share `SLAB` to `/home/me` on worker nodes in the cluster.
 
-### (3) Generate Test Data
+### (4) Generate Test Data
 
 Tests expect that data has been pre-generated and loaded into HDFS/Greenplum. Fortunately, we have provided scripts which automate this process. There are four directories which manage building data. As described above, each contains a `make.py` which will build that directory. The make file will handle generating data to your specifications as well as loading it into Greenplum and HDFS. Note that data generators use SQL internally so it's important to have one installed and configured as described above even if you don't want to run any of the MADLib tests. 
 
@@ -63,9 +73,33 @@ Tests expect that data has been pre-generated and loaded into HDFS/Greenplum. Fo
  3. `/data/SimpleMatrixOps (Disk Data)` - This directory generates dense synthetic datasets to use for experiments. The make file takes an option which can be used to stiplate the approximate size of data generated. Note that sizes are calculated somewhat unrealisitically assuming that each double uses exactly 8 bytes. The size of files generated is also larger on disk, so generating a matrix with an approximate size of 16GB will result in a matrix on disk which is about 30GB. 
  4. `/data/SimpleMatrixOps (Sparse Data)` - This directory generates sparse synthetic data in `i,j,v` format. The make file for this directory takes two options which can set the *logical* size of matrices generated (e.g. 100GB if fully materialized with zeros on disk) and the fraction of values which are nonzero. Again, run the make file with the `-h` flag to see the appropriate syntax.
 
-### (4) Run Tests
+### (5) Run Tests
 
-Running tests is very straightforward! Just `cd` to the appropriate directory and run `make.py`. Each system will do its thing and log runtimes to the test directory's `/output` subfolder. It should be clear from filenames which log corresponds to each test. As before each `make.py` script takes command line arguments which can be used to adjust the parameters of each test. Use `python make.py -h` to see the specific options supported by each script.  
+Running tests is very straightforward! Just `cd` to the appropriate directory and run `make.py`. Each system will do its thing and log runtimes to the test directory's `/output` subfolder. It should be clear from filenames which log corresponds to each test. As before each `make.py` script takes command line arguments which can be used to adjust the parameters of each test. Use `python make.py -h` to see the specific options supported by each script. The following points detail the meaning of common command line arguments. This is not an exhaustive list. Be sure to consult the help output for each test:
+
+1. `systems` - A space delimited list of systems to compare. In the distributed setting may be any of `"MADLIB SYSTEMML MLLIB R"`. In the single node setting may be any of `"MADLIB SYSTEMML MLLIB R TF NUMPY"`.
+2. `operators` - For `SimpleMatrixOps` tests a space delimited list of operators to evaluate. May be any of `TRANS MVM NORM TSM GMM ADD`.
+4. `test-type` - Which type of test to run. Several directories can run multiple tests. Consult the output of `python make.py -h` for the options available for each directory.
+3. `algorithms` - For `MLAlgorithms` tests a space delimited list of algorithms to run. For LA based tests may be any of `robust gnmf reg logit`. For native implementation tests may be any of `reg logit pca`.
+4. `nodes` - For distributed tests the number of nodes on which the test is being run. E.g. if you're running the test on a two node cluster this would be 2.
+
+## Examples:
+
+The following example details how to build data and run tests to compare system performance for dense primitive matrix operators and dense LA based ML algorithms on matrices which will be approximately 8 and 32 GB on disk as CSV files.
+
+    cd "${BENCHMARK_PROJECT_ROOT}/data/SimpleMatrixOps (Disk Data)/src"
+    python make.py --msize "4 16"
+    
+    cd "${BENCHMARK_PROJECT_ROOT}/tests/SimpleMatrixOps (Distributed Disk)/src"
+    # Note that --msize must agree with the sizes used above
+    unbuffer python make.py --nodes 8 --msize "4 16" --systems "MLLIB R" --operators "NORM GMM" --test-type scale_mat 2>&1 | tee make8.out
+    cd ../output
+    tail -vn +1 *.txt
+    
+    cd "${BENCHMARK_PROJECT_ROOT}/tests/MLAlgorithms (Distributed Dense LA)/src"
+    unbuffer python make.py --nodes 8 --msize "4 16" --systems "MLLIB R" --algorithms "logit gnmf" --test-type scale 2>&1 | tee make8.out
+    cd ../output
+    tail -vn +1 *.txt
 
 ## Details
 
