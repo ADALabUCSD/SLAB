@@ -6,7 +6,7 @@ The Scalable Linear Algebra Benchmark
 
 ## Instructions
 
-### Descrition of Directory Structure
+### Description of Directory Structure
 
 All directories follow an identical configuration. Each directory consists of two folders: `src` and `output`. `src` contains all code for that directory and `output` contains output (mostly logs) produced by code in `src`. Each `src` folder contains a script `make.py` which will run all code for that directory. `make.py` often requires command line arguments which can be used to control which tests are run, what datasets are used, etc... To see the command line arguments needed by a particular `make.py` simply run `python make.py -h` and a help message will be printed explain what options are required/present. By default, `make.py` does not capture the `stdout` and `stderr` of child processes. It is often useful to log `stdout` and `stderr`. To do so, simply pipe the output of `make.py` to a log file: `unbuffer python make.py <options> 2>&1 | tee make.out`.
 
