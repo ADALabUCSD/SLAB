@@ -1,0 +1,898 @@
+
+ make.py started: 2018-01-31 16:50:30 /home/ubuntu/benchmark/tests/SimpleMatrixOps (Distributed Sparse)/src 
+
+
+name := "SystemMLMatrixOps"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq(
+    "org.apache.spark" %% "spark-mllib"  % "2.2.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+name := "MLLibMatrixops"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq (
+    "org.apache.spark" %% "spark-core" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-streaming" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "2.2.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+import os
+import sys
+
+sys.path.append('../external/lib/python')
+import make_utils as utils
+import global_params as params
+import gen_data as data
+
+nodes = sys.argv[1]
+sparsity = sys.argv[2].split(' ')
+systems = sys.argv[3].split(' ')
+op_types = ['NORM','MVM','ADD','TRANS','GMM','TSM']
+
+all_files = os.listdir('../output/scale_nodes')
+for s in systems:
+    for op in op_types:
+        relevant_files = filter(
+            lambda x: (s in x) and (op in x) and (nodes in x), all_files)
+        map(lambda x: 
+            os.unlink('../output/scale_nodes/{}'.format(x)), relevant_files)
+
+cmd_args = ('opType={opType} mattype={mattype}'
+            ' Mpath={Mpath} Npath={Npath}'
+            ' wPath={wPath} tableStub={tableStub}'
+            ' nodes={nodes} passPath=/scratch/pass.csv'
+            ' savestub={savestub} sr={sr} '
+            ' outdir=../output/scale_nodes')
+
+data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
+utils.hdfs_put('../temp/pass.csv')
+
+gb = 100
+for op in op_types:
+    for sr in sparsity:
+        mattype_m = 'tall' if op != 'GMM' else 'wide'
+        mattype_n = 'tall'
+        fmt = (sr, gb, mattype_m)
+
+        Mpath_disk = '../external/disk_data/M_{}{}_sparse_{}.mtx'.format(*fmt)
+        wPath_disk = '../external/disk_data/w_{}{}_sparse_{}.mtx'.format(*fmt)
+        Npath_disk = '../external/disk_data/N_{}{}_sparse_{}.mtx'.format(*fmt)
+        if op == 'GMM':
+            Npath_disk = Mpath_disk.replace('wide','tall')
+
+        Mpath_hdfs = Mpath_disk.replace('../external/disk_data', '/scratch')
+        wPath_hdfs = wPath_disk.replace('../external/disk_data', '/scratch')
+        Npath_hdfs = Npath_disk.replace('../external/disk_data', '/scratch')
+
+        cmd_params_disk = {'mattype' : mattype_m,
+                           'Mpath'   : Mpath_disk,
+                           'wPath'   : wPath_disk,
+                           'Npath'   : Npath_disk,
+                           'nodes'   : nodes,
+                           'savestub': gb,
+                           'sr'      : sr,
+                           'tableStub' : '_{}{}_sparse_{}'.format(*fmt)}
+        cmd_params_hdfs = {'mattype' : mattype_m,
+                           'Mpath'   : Mpath_hdfs,
+                           'wPath'   : wPath_hdfs,
+                           'Npath'   : Npath_hdfs,
+                           'nodes'   : nodes,
+                           'savestub': gb,
+                           'sr'      : sr,
+                           'tableStub' : '_{}{}_sparse_{}'.format(*fmt)}
+
+        cmd_params_disk['opType'] = op
+        cmd_params_hdfs['opType'] = op
+        args_disk = cmd_args.format(**cmd_params_disk)
+        args_hdfs = cmd_args.format(**cmd_params_hdfs)
+
+        if 'SYSML' in systems:
+            utils.run_spark(program = 'SystemMLMatrixOps',
+                            sbt_dir = './systemml',
+                            cmd_args = args_hdfs)
+        if 'MLLIB' in systems:
+            utils.run_spark(program = 'SparkMatrixOps',
+                            sbt_dir = './mllib',
+                            cmd_args = args_hdfs)
+        if ('MADLIB' in systems) and (op != 'MVM'):
+            utils.run_python(program = 'madlib_matrix_ops.py',
+                             cmd_args = args_disk)
+
+# stop logging
+end_make_logging()
+
+Running: python _node_scaling_tests.py 2 "01" "SYSML"
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val savestub = argMap("savestub")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+        val sr = argMap("sr")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('${Npath}')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case "ADD" => s"print(sum(N))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "tmp = utils::printRandElements(R, 10)"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Sparse)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,sr,time1,time2,time3,time4,time5\n")
+        }
+
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('$libDir')
+          | source('utils.dml') as utils
+          |
+          | M = read(Mpath)
+          | K = sum( M )
+          | print(K)
+          | $allocOp
+          | $extraPrintOp
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0.0) {
+          |       start = utils::time(1)
+          |   }
+          |   R = $opString
+          |   if (K > 0.0) {
+          |       $printOp
+          |   }
+          |   if (K > 0.0) {
+          |       stop = utils::time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000
+          | }
+          | times = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("times")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + sr + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=2 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val savestub = argMap("savestub")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+        val sr = argMap("sr")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('${Npath}')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case "ADD" => s"print(sum(N))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "tmp = utils::printRandElements(R, 10)"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Sparse)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,sr,time1,time2,time3,time4,time5\n")
+        }
+
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('$libDir')
+          | source('utils.dml') as utils
+          |
+          | M = read(Mpath)
+          | K = sum( M )
+          | print(K)
+          | $allocOp
+          | $extraPrintOp
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0.0) {
+          |       start = utils::time(1)
+          |   }
+          |   R = $opString
+          |   if (K > 0.0) {
+          |       $printOp
+          |   }
+          |   if (K > 0.0) {
+          |       stop = utils::time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000
+          | }
+          | times = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("times")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + sr + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=2 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val savestub = argMap("savestub")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+        val sr = argMap("sr")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('${Npath}')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case "ADD" => s"print(sum(N))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "tmp = utils::printRandElements(R, 10)"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Sparse)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,sr,time1,time2,time3,time4,time5\n")
+        }
+
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('$libDir')
+          | source('utils.dml') as utils
+          |
+          | M = read(Mpath)
+          | K = sum( M )
+          | print(K)
+          | $allocOp
+          | $extraPrintOp
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0.0) {
+          |       start = utils::time(1)
+          |   }
+          |   R = $opString
+          |   if (K > 0.0) {
+          |       $printOp
+          |   }
+          |   if (K > 0.0) {
+          |       stop = utils::time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000
+          | }
+          | times = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("times")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + sr + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=2 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val savestub = argMap("savestub")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+        val sr = argMap("sr")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('${Npath}')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case "ADD" => s"print(sum(N))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "tmp = utils::printRandElements(R, 10)"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Sparse)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,sr,time1,time2,time3,time4,time5\n")
+        }
+
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('$libDir')
+          | source('utils.dml') as utils
+          |
+          | M = read(Mpath)
+          | K = sum( M )
+          | print(K)
+          | $allocOp
+          | $extraPrintOp
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0.0) {
+          |       start = utils::time(1)
+          |   }
+          |   R = $opString
+          |   if (K > 0.0) {
+          |       $printOp
+          |   }
+          |   if (K > 0.0) {
+          |       stop = utils::time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000
+          | }
+          | times = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("times")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + sr + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=2 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val savestub = argMap("savestub")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+        val sr = argMap("sr")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('${Npath}')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case "ADD" => s"print(sum(N))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "tmp = utils::printRandElements(R, 10)"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Sparse)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,sr,time1,time2,time3,time4,time5\n")
+        }
+
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('$libDir')
+          | source('utils.dml') as utils
+          |
+          | M = read(Mpath)
+          | K = sum( M )
+          | print(K)
+          | $allocOp
+          | $extraPrintOp
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0.0) {
+          |       start = utils::time(1)
+          |   }
+          |   R = $opString
+          |   if (K > 0.0) {
+          |       $printOp
+          |   }
+          |   if (K > 0.0) {
+          |       stop = utils::time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000
+          | }
+          | times = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("times")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + sr + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_01100_sparse_wide.mtx Npath=/scratch/M_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_wide.mtx tableStub=_01100_sparse_wide nodes=2 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val savestub = argMap("savestub")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+        val sr = argMap("sr")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('${Npath}')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case "ADD" => s"print(sum(N))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "tmp = utils::printRandElements(R, 10)"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Sparse)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,sr,time1,time2,time3,time4,time5\n")
+        }
+
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('$libDir')
+          | source('utils.dml') as utils
+          |
+          | M = read(Mpath)
+          | K = sum( M )
+          | print(K)
+          | $allocOp
+          | $extraPrintOp
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0.0) {
+          |       start = utils::time(1)
+          |   }
+          |   R = $opString
+          |   if (K > 0.0) {
+          |       $printOp
+          |   }
+          |   if (K > 0.0) {
+          |       stop = utils::time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000
+          | }
+          | times = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("times")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + sr + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=2 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+ make.py ended: 2018-01-31 17:41:21

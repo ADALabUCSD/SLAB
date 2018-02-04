@@ -1,0 +1,154 @@
+
+ make.py started: 2018-01-30 18:48:37 /home/ubuntu/benchmark/tests/Pipelines (Distributed Dense)/src 
+
+
+name := "SystemMLPipelines"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq(
+    "org.apache.spark" %% "spark-mllib" % "2.2.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+name := "MLLibMatrixops"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq (
+    "org.apache.spark" %% "spark-mllib" % "2.2.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import breeze.{linalg => bAlg, numerics => bNum}
+import breeze.linalg.{Vector => bVector,
+                      Matrix => bMatrix,
+                      SparseVector => bSparseVector,
+                      DenseVector => bDenseVector,
+                      CSCMatrix => bSparseMatrix,
+                      DenseMatrix => bDenseMatrix}
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkPipelines {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibMatrixOps")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val stub = s"/tests/Pipelines (Distributed Dense)/output/"
+        val base = s"mllib_pipelines.txt"
+        val path = root + stub + base
+
+        File(path).writeAll("rows,time1,time2,time3,time4,time5\n")
+
+        val nrows = Array[Int](1000,10000,100000,1000000)
+        for (r <- nrows) {
+            val t = random_matrix(r, 1, 1024, 1, sc)
+            val u = random_matrix(1, r, 1, 1024, sc)
+            val v = random_matrix(r, 1, 1024, 1, sc)
+
+            val times = Array[Double](0,0,0,0,0)
+            for (ix <- 0 to 4) {
+                val start = System.nanoTime()
+
+                val res = t.multiply( u, 500 ).multiply( v, 500 )
+                println(res.blocks.count)
+                
+                val stop = System.nanoTime()
+                times(ix) = (stop - start)/1e9
+            }
+
+            File(path).appendAll(s"${r}" + "," + times.mkString(",") + '\n')
+
+        }
+    }
+
+    def random_matrix(N: Int, K: Int,
+                      r: Int, c: Int, sc: SparkContext) : BlockMatrix = {
+        val tmp = new IndexedRowMatrix(
+            normalVectorRDD(sc, N.toLong, K).zipWithIndex().map(
+                tup => new IndexedRow(tup._2, tup._1))).toBlockMatrix(r, c)
+        val MM = new BlockMatrix(tmp.blocks.repartition(1000), 
+                                 tmp.rowsPerBlock, tmp.colsPerBlock,
+                                 tmp.numRows, tmp.numCols)
+        MM.persist(MEMORY_AND_DISK_SER)
+        MM.blocks.count
+        return MM
+    }
+}
+
+Running: spark-submit --class SparkPipelines   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+ make.py ended: 2018-01-30 19:32:02

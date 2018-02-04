@@ -1,0 +1,787 @@
+
+ make.py started: 2018-01-31 20:36:25 /home/ubuntu/benchmark/tests/MLAlgorithms (Distributed Dense LA)/src 
+
+
+name := "SystemMLAlgs"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq(
+    "org.apache.spark" %% "spark-mllib" % "2.2.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+name := "MLLibAlgs"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq (
+    "org.apache.spark" %% "spark-core" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-streaming" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "2.2.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+import os
+import sys
+
+sys.path.append('../external/lib/python')
+import make_utils as utils
+import global_params as params
+import gen_data as data
+
+stub = sys.argv[1]
+nodes = sys.argv[2]
+msize = sys.argv[3].split(' ')
+algorithms = sys.argv[4].split(' ')
+systems = sys.argv[5].split(' ')
+
+data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
+utils.hdfs_put('../temp/pass.csv')
+
+args_R = ('mattype=tall '
+          'Xpath=../external/disk_data/M{gb}_tall.csv '
+          'Ypath=../external/disk_data/y{gb}_tall.csv '
+          'nodes={nodes} opType={op}')
+args_madlib = ('mattype=tall '
+               'xTableName=M{gb}_tall '
+               'yTableName=y{gb}_tall '
+               'nodes={nodes} opType={op}')
+args_hdfs = ('mattype=tall '
+             'Xpath=/scratch/M{gb}_tall.csv '
+             'Ypath=/scratch/y{gb}_tall.csv '
+             'passPath=/scratch/pass.csv '
+             'nodes={nodes} opType={op}')
+
+for gb in msize:
+    for alg in algorithms:
+        if alg == 'logit':
+            ytable_name = 'adclick_y_array{}'
+        else:
+            ytable_name = 'adclick_y_mat{}'
+        argv = {'stub': stub,
+                'nodes': nodes,
+                'op': alg,
+                'gb': gb}
+        cmd_args_R = args_R.format(**argv)
+        cmd_args_madlib = args_madlib.format(**argv)
+        cmd_args_hdfs = args_hdfs.format(**argv)
+       
+        if 'R' in systems:
+            utils.run_pbdR(program='ml_algs.R',
+                           cmd_args=cmd_args_R)
+        if 'SYSTEMML' in systems:
+            utils.run_spark(program='SystemMLMLAlgorithms',
+                            sbt_dir='./systemml',
+                            driver_memory='32G',
+                            cmd_args=cmd_args_hdfs)
+        if 'MLLIB' in systems:
+            utils.run_spark(program='SparkMLAlgorithms',
+                            sbt_dir='./mllib',
+                            driver_memory='32G',
+                            cmd_args=cmd_args_hdfs)
+        if 'MADLIB' in systems:
+            utils.run_python(program='madlib_algs.py', 
+                             cmd_args=cmd_args_madlib)
+
+Running: python _run_scale_tests.py _1 8 "2 4 8 16" "robust" "R"
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT, quietly=TRUE))
+suppressMessages(library(pbdMPI, quietly=TRUE))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- suppressMessages(parseCMDArg(arg))
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Xpath <- argList[['Xpath']]
+Ypath <- argList[['Ypath']]
+nodes <- argList[['nodes']]
+dataPath <- argList[['dataPath']]
+
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+alloc_binary_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M > .83)
+}
+
+logitReg <- function(X, y, iterations=3) {
+    N <- nrow(X)
+
+    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
+    iteration <- 1
+    stepSize <- 10
+
+    while (iteration < iterations) {
+        xb <- X %*% w
+        delta <- y - 1/(1+exp(-xb))
+        stepSize <- stepSize / 2
+        w <- w + ((stepSize*crossprod(X, delta))/N)
+
+        iteration <- iteration+1
+    }
+
+    return(w)
+}
+
+gnmf <- function(X, r, iterations=3) {
+    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
+    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
+
+    iteration <- 0
+    while (iteration < iterations) {
+        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
+        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
+        iteration <- iteration + 1
+    }
+
+    return(list(W,H))
+}
+
+reg <- function(X, y) {
+    b <- solve(t(X) %*% X, t(X) %*% y)
+    return(b)
+}
+
+robust_se <- function(X, r2) {
+    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
+    XTX_INV <- solve( crossprod( X ) )
+    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
+    return(se)
+}
+
+pca <- function(X) {
+    N <- nrow( X )
+    XS <- sweep(X, 2, colMeans(X))
+    S <- (1/(N-1)) * (crossprod( XS ))
+    eigs <- eigen( S )
+
+    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
+    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
+    # do this though using the tools provided by pbdR! This doesn't really matter
+    # for performance but is important for accuracy.
+
+    PRJ <- XS %*% eigs$values[,1:k]
+    return(PRJ)
+}
+
+X <- alloc_matrix(Xpath)
+y <- alloc_binary_matrix(Ypath)
+
+rows <- nrow(X)
+cols <- ncol(X)
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+
+times <- rep(0,5)
+
+b <- NULL
+if (opType == 'robust') {
+    b <- reg(X, y)
+    y_hat <- X %*% b
+    s <- sum(y_hat)
+    r2 <- t(y - y_hat)^2
+}
+
+for (ix in 1:5) {
+    comm.print("START")
+    barrier()
+    a <- Sys.time()
+
+    if (opType == 'logit') {
+        logitReg(X, y)
+    } else if (opType == 'gnmf') {
+        gnmf(X, 10)
+    } else if (opType == 'reg') {
+        reg(X, y)
+    } else if (opType == 'robust') {
+        robust_se(X, r2)
+    }
+
+    comm.print('AT BARRIER')
+    barrier()
+    b <- Sys.time()
+    times[ix] <- as.numeric(b-a, units="secs")
+    comm.print('STOP')
+}
+
+if (comm.rank() == 0) {
+    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
+
+    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,'nodes'] <- nodes
+    runTimes[1,c('rows','cols')] <- c(rows,cols)
+    runTimes[1,4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M2_tall.csv Ypath=../external/disk_data/y2_tall.csv nodes=8 opType=robust
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT, quietly=TRUE))
+suppressMessages(library(pbdMPI, quietly=TRUE))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- suppressMessages(parseCMDArg(arg))
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Xpath <- argList[['Xpath']]
+Ypath <- argList[['Ypath']]
+nodes <- argList[['nodes']]
+dataPath <- argList[['dataPath']]
+
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+alloc_binary_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M > .83)
+}
+
+logitReg <- function(X, y, iterations=3) {
+    N <- nrow(X)
+
+    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
+    iteration <- 1
+    stepSize <- 10
+
+    while (iteration < iterations) {
+        xb <- X %*% w
+        delta <- y - 1/(1+exp(-xb))
+        stepSize <- stepSize / 2
+        w <- w + ((stepSize*crossprod(X, delta))/N)
+
+        iteration <- iteration+1
+    }
+
+    return(w)
+}
+
+gnmf <- function(X, r, iterations=3) {
+    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
+    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
+
+    iteration <- 0
+    while (iteration < iterations) {
+        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
+        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
+        iteration <- iteration + 1
+    }
+
+    return(list(W,H))
+}
+
+reg <- function(X, y) {
+    b <- solve(t(X) %*% X, t(X) %*% y)
+    return(b)
+}
+
+robust_se <- function(X, r2) {
+    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
+    XTX_INV <- solve( crossprod( X ) )
+    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
+    return(se)
+}
+
+pca <- function(X) {
+    N <- nrow( X )
+    XS <- sweep(X, 2, colMeans(X))
+    S <- (1/(N-1)) * (crossprod( XS ))
+    eigs <- eigen( S )
+
+    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
+    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
+    # do this though using the tools provided by pbdR! This doesn't really matter
+    # for performance but is important for accuracy.
+
+    PRJ <- XS %*% eigs$values[,1:k]
+    return(PRJ)
+}
+
+X <- alloc_matrix(Xpath)
+y <- alloc_binary_matrix(Ypath)
+
+rows <- nrow(X)
+cols <- ncol(X)
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+
+times <- rep(0,5)
+
+b <- NULL
+if (opType == 'robust') {
+    b <- reg(X, y)
+    y_hat <- X %*% b
+    s <- sum(y_hat)
+    r2 <- t(y - y_hat)^2
+}
+
+for (ix in 1:5) {
+    comm.print("START")
+    barrier()
+    a <- Sys.time()
+
+    if (opType == 'logit') {
+        logitReg(X, y)
+    } else if (opType == 'gnmf') {
+        gnmf(X, 10)
+    } else if (opType == 'reg') {
+        reg(X, y)
+    } else if (opType == 'robust') {
+        robust_se(X, r2)
+    }
+
+    comm.print('AT BARRIER')
+    barrier()
+    b <- Sys.time()
+    times[ix] <- as.numeric(b-a, units="secs")
+    comm.print('STOP')
+}
+
+if (comm.rank() == 0) {
+    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
+
+    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,'nodes'] <- nodes
+    runTimes[1,c('rows','cols')] <- c(rows,cols)
+    runTimes[1,4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M4_tall.csv Ypath=../external/disk_data/y4_tall.csv nodes=8 opType=robust
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT, quietly=TRUE))
+suppressMessages(library(pbdMPI, quietly=TRUE))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- suppressMessages(parseCMDArg(arg))
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Xpath <- argList[['Xpath']]
+Ypath <- argList[['Ypath']]
+nodes <- argList[['nodes']]
+dataPath <- argList[['dataPath']]
+
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+alloc_binary_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M > .83)
+}
+
+logitReg <- function(X, y, iterations=3) {
+    N <- nrow(X)
+
+    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
+    iteration <- 1
+    stepSize <- 10
+
+    while (iteration < iterations) {
+        xb <- X %*% w
+        delta <- y - 1/(1+exp(-xb))
+        stepSize <- stepSize / 2
+        w <- w + ((stepSize*crossprod(X, delta))/N)
+
+        iteration <- iteration+1
+    }
+
+    return(w)
+}
+
+gnmf <- function(X, r, iterations=3) {
+    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
+    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
+
+    iteration <- 0
+    while (iteration < iterations) {
+        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
+        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
+        iteration <- iteration + 1
+    }
+
+    return(list(W,H))
+}
+
+reg <- function(X, y) {
+    b <- solve(t(X) %*% X, t(X) %*% y)
+    return(b)
+}
+
+robust_se <- function(X, r2) {
+    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
+    XTX_INV <- solve( crossprod( X ) )
+    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
+    return(se)
+}
+
+pca <- function(X) {
+    N <- nrow( X )
+    XS <- sweep(X, 2, colMeans(X))
+    S <- (1/(N-1)) * (crossprod( XS ))
+    eigs <- eigen( S )
+
+    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
+    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
+    # do this though using the tools provided by pbdR! This doesn't really matter
+    # for performance but is important for accuracy.
+
+    PRJ <- XS %*% eigs$values[,1:k]
+    return(PRJ)
+}
+
+X <- alloc_matrix(Xpath)
+y <- alloc_binary_matrix(Ypath)
+
+rows <- nrow(X)
+cols <- ncol(X)
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+
+times <- rep(0,5)
+
+b <- NULL
+if (opType == 'robust') {
+    b <- reg(X, y)
+    y_hat <- X %*% b
+    s <- sum(y_hat)
+    r2 <- t(y - y_hat)^2
+}
+
+for (ix in 1:5) {
+    comm.print("START")
+    barrier()
+    a <- Sys.time()
+
+    if (opType == 'logit') {
+        logitReg(X, y)
+    } else if (opType == 'gnmf') {
+        gnmf(X, 10)
+    } else if (opType == 'reg') {
+        reg(X, y)
+    } else if (opType == 'robust') {
+        robust_se(X, r2)
+    }
+
+    comm.print('AT BARRIER')
+    barrier()
+    b <- Sys.time()
+    times[ix] <- as.numeric(b-a, units="secs")
+    comm.print('STOP')
+}
+
+if (comm.rank() == 0) {
+    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
+
+    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,'nodes'] <- nodes
+    runTimes[1,c('rows','cols')] <- c(rows,cols)
+    runTimes[1,4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M8_tall.csv Ypath=../external/disk_data/y8_tall.csv nodes=8 opType=robust
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT, quietly=TRUE))
+suppressMessages(library(pbdMPI, quietly=TRUE))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- suppressMessages(parseCMDArg(arg))
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Xpath <- argList[['Xpath']]
+Ypath <- argList[['Ypath']]
+nodes <- argList[['nodes']]
+dataPath <- argList[['dataPath']]
+
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+alloc_binary_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M > .83)
+}
+
+logitReg <- function(X, y, iterations=3) {
+    N <- nrow(X)
+
+    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
+    iteration <- 1
+    stepSize <- 10
+
+    while (iteration < iterations) {
+        xb <- X %*% w
+        delta <- y - 1/(1+exp(-xb))
+        stepSize <- stepSize / 2
+        w <- w + ((stepSize*crossprod(X, delta))/N)
+
+        iteration <- iteration+1
+    }
+
+    return(w)
+}
+
+gnmf <- function(X, r, iterations=3) {
+    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
+    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
+
+    iteration <- 0
+    while (iteration < iterations) {
+        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
+        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
+        iteration <- iteration + 1
+    }
+
+    return(list(W,H))
+}
+
+reg <- function(X, y) {
+    b <- solve(t(X) %*% X, t(X) %*% y)
+    return(b)
+}
+
+robust_se <- function(X, r2) {
+    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
+    XTX_INV <- solve( crossprod( X ) )
+    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
+    return(se)
+}
+
+pca <- function(X) {
+    N <- nrow( X )
+    XS <- sweep(X, 2, colMeans(X))
+    S <- (1/(N-1)) * (crossprod( XS ))
+    eigs <- eigen( S )
+
+    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
+    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
+    # do this though using the tools provided by pbdR! This doesn't really matter
+    # for performance but is important for accuracy.
+
+    PRJ <- XS %*% eigs$values[,1:k]
+    return(PRJ)
+}
+
+X <- alloc_matrix(Xpath)
+y <- alloc_binary_matrix(Ypath)
+
+rows <- nrow(X)
+cols <- ncol(X)
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+
+times <- rep(0,5)
+
+b <- NULL
+if (opType == 'robust') {
+    b <- reg(X, y)
+    y_hat <- X %*% b
+    s <- sum(y_hat)
+    r2 <- t(y - y_hat)^2
+}
+
+for (ix in 1:5) {
+    comm.print("START")
+    barrier()
+    a <- Sys.time()
+
+    if (opType == 'logit') {
+        logitReg(X, y)
+    } else if (opType == 'gnmf') {
+        gnmf(X, 10)
+    } else if (opType == 'reg') {
+        reg(X, y)
+    } else if (opType == 'robust') {
+        robust_se(X, r2)
+    }
+
+    comm.print('AT BARRIER')
+    barrier()
+    b <- Sys.time()
+    times[ix] <- as.numeric(b-a, units="secs")
+    comm.print('STOP')
+}
+
+if (comm.rank() == 0) {
+    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
+
+    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,'nodes'] <- nodes
+    runTimes[1,c('rows','cols')] <- c(rows,cols)
+    runTimes[1,4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M16_tall.csv Ypath=../external/disk_data/y16_tall.csv nodes=8 opType=robust
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+ make.py ended: 2018-01-31 20:48:54

@@ -1,0 +1,490 @@
+
+ make.py started: 2018-01-05 01:42:50 /home/ubuntu/benchmark/tests/Decompositions (Distributed Dense)/src 
+
+
+name := "SystemMLMatrixOps"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq(
+    "org.apache.spark"     % "spark-sql_2.11"  % "2.1.1" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+name := "MLLibMatrixops"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq (
+    "org.apache.spark" %% "spark-core" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-streaming" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "2.2.0" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+import os
+import sys
+import shutil
+
+sys.path.append('../external/lib/python')
+import make_utils as utils
+import global_params as params
+import gen_data as data
+
+nodes = sys.argv[1]
+matsize = sys.argv[2].split(' ')
+systems = sys.argv[3].split(' ')
+ops = ["SVD"]
+
+cmd_args = ('opType={opType} mattype={mattype}'
+            ' Mpath={Mpath} Npath={Npath}'
+            ' wPath={wPath} tableStub={tableStub}'
+            ' nodes={nodes} passPath=/scratch/pass.csv'
+            ' outdir=scale_mat_size savestub={savestub}')
+
+data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
+utils.hdfs_put('../temp/pass.csv')
+
+for op in ops:
+    for gb in matsize:
+        mattype_m = 'tall' if op != 'GMM' else 'wide'
+        mattype_n = 'tall'
+
+        Mpath_disk = '../external/disk_data/M{}_{}.csv'.format(gb,mattype_m)
+        wPath_disk = '../external/disk_data/w{}_{}.csv'.format(gb,mattype_m)
+        Npath_disk = '../external/disk_data/N{}_{}.csv'.format(gb,mattype_n)
+        if op == 'GMM':
+            NPath_disk = '../external/disk_data/M{}_tall.csv'.format(gb)
+
+        Mpath_hdfs = Mpath_disk.replace('../external/disk_data', '/scratch')
+        wPath_hdfs = wPath_disk.replace('../external/disk_data', '/scratch')
+        Npath_hdfs = Npath_disk.replace('../external/disk_data', '/scratch')
+
+        cmd_params_disk = {'mattype' : mattype_m,
+                   'Mpath'   : Mpath_disk,
+                   'wPath'   : wPath_disk,
+                   'Npath'   : Npath_disk,
+                   'nodes'   : nodes,
+                   'savestub': gb,
+                   'tableStub' : '{}_{}'.format(gb, mattype_m)}
+        cmd_params_hdfs = {'mattype' : mattype_m,
+                   'Mpath'   : Mpath_hdfs,
+                   'wPath'   : wPath_hdfs,
+                   'Npath'   : Npath_hdfs,
+                   'nodes'   : nodes,
+                   'savestub': gb,
+                   'tableStub' : '{}_{}'.format(gb, mattype_m)}
+
+        cmd_params_disk['opType'] = op
+        cmd_params_hdfs['opType'] = op
+        args_disk = cmd_args.format(**cmd_params_disk)
+        args_hdfs = cmd_args.format(**cmd_params_hdfs)
+
+        if 'MLLIB' in systems:
+          utils.run_spark(program = 'SparkDecompositions',
+                 sbt_dir = './mllib',
+                 cmd_args = args_hdfs)
+        if 'MADLIB' in systems:
+          utils.run_python(program = 'madlib_matrix_ops.py',
+                  cmd_args = args_disk)
+        if 'R' in systems:
+          utils.run_pbdR(program = 'R_matrix_ops.R',
+                cmd_args = args_disk)
+
+Running: python _msize_scaling_tests.py 8 "2 4 8 16" "R"
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT))
+suppressMessages(library(pbdMPI))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- parseCMDArg(arg)
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Mpath <- argList[['Mpath']]
+Npath <- argList[['Npath']]
+wPath <- argList[['wPath']]
+nodes <- argList[['nodes']]
+outdir <- argList[['outdir']]
+
+# reading in giant CSV files in R is a terrible process so just
+# allocate data on the fly in distributed memory
+# this amounts to the same thing for testing purposes
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+M <- alloc_matrix(Mpath)
+if (opType == "SVD") {
+    call <- 'svd( M, nu=10, nv=10 )'
+} else {
+    comm.print('Invalid operation')
+    comm.stop()
+}
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+times <- double(5)
+
+for (ix in 1:5) {
+    barrier()
+    a <- Sys.time()
+
+    res <- eval(parse(text=call))
+
+    barrier()
+    b <- Sys.time()
+    times[ix] <- b - a
+}
+
+if (comm.rank() == 0) {
+    rows <- nrow(M)
+    cols <- ncol(M)
+    path <- paste('../output/', outdir,
+                  '/R_', mattype, '_',
+                  opType, nodes,
+                  '.txt', sep='')
+
+    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
+    runTimes[1, 4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M2_tall.csv Npath=../external/disk_data/N2_tall.csv wPath=../external/disk_data/w2_tall.csv tableStub=2_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=2
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT))
+suppressMessages(library(pbdMPI))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- parseCMDArg(arg)
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Mpath <- argList[['Mpath']]
+Npath <- argList[['Npath']]
+wPath <- argList[['wPath']]
+nodes <- argList[['nodes']]
+outdir <- argList[['outdir']]
+
+# reading in giant CSV files in R is a terrible process so just
+# allocate data on the fly in distributed memory
+# this amounts to the same thing for testing purposes
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+M <- alloc_matrix(Mpath)
+if (opType == "SVD") {
+    call <- 'svd( M, nu=10, nv=10 )'
+} else {
+    comm.print('Invalid operation')
+    comm.stop()
+}
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+times <- double(5)
+
+for (ix in 1:5) {
+    barrier()
+    a <- Sys.time()
+
+    res <- eval(parse(text=call))
+
+    barrier()
+    b <- Sys.time()
+    times[ix] <- b - a
+}
+
+if (comm.rank() == 0) {
+    rows <- nrow(M)
+    cols <- ncol(M)
+    path <- paste('../output/', outdir,
+                  '/R_', mattype, '_',
+                  opType, nodes,
+                  '.txt', sep='')
+
+    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
+    runTimes[1, 4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M4_tall.csv Npath=../external/disk_data/N4_tall.csv wPath=../external/disk_data/w4_tall.csv tableStub=4_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=4
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT))
+suppressMessages(library(pbdMPI))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- parseCMDArg(arg)
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Mpath <- argList[['Mpath']]
+Npath <- argList[['Npath']]
+wPath <- argList[['wPath']]
+nodes <- argList[['nodes']]
+outdir <- argList[['outdir']]
+
+# reading in giant CSV files in R is a terrible process so just
+# allocate data on the fly in distributed memory
+# this amounts to the same thing for testing purposes
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+M <- alloc_matrix(Mpath)
+if (opType == "SVD") {
+    call <- 'svd( M, nu=10, nv=10 )'
+} else {
+    comm.print('Invalid operation')
+    comm.stop()
+}
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+times <- double(5)
+
+for (ix in 1:5) {
+    barrier()
+    a <- Sys.time()
+
+    res <- eval(parse(text=call))
+
+    barrier()
+    b <- Sys.time()
+    times[ix] <- b - a
+}
+
+if (comm.rank() == 0) {
+    rows <- nrow(M)
+    cols <- ncol(M)
+    path <- paste('../output/', outdir,
+                  '/R_', mattype, '_',
+                  opType, nodes,
+                  '.txt', sep='')
+
+    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
+    runTimes[1, 4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M8_tall.csv Npath=../external/disk_data/N8_tall.csv wPath=../external/disk_data/w8_tall.csv tableStub=8_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=8
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+suppressMessages(library(pbdDMAT))
+suppressMessages(library(pbdMPI))
+BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
+source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+
+init.grid()
+
+argv <- commandArgs(trailingOnly = TRUE)
+argList <- list()
+for (arg in argv) {
+    parsed <- parseCMDArg(arg)
+    argList[[parsed[[1]]]] <- parsed[[2]]
+}
+
+mattype <- argList[['mattype']]
+opType <- argList[['opType']]
+Mpath <- argList[['Mpath']]
+Npath <- argList[['Npath']]
+wPath <- argList[['wPath']]
+nodes <- argList[['nodes']]
+outdir <- argList[['outdir']]
+
+# reading in giant CSV files in R is a terrible process so just
+# allocate data on the fly in distributed memory
+# this amounts to the same thing for testing purposes
+alloc_matrix <- function(path, bldim=32) {
+    meta <- parseMetadata(path)
+    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
+    return(M)
+}
+
+M <- alloc_matrix(Mpath)
+if (opType == "SVD") {
+    call <- 'svd( M, nu=10, nv=10 )'
+} else {
+    comm.print('Invalid operation')
+    comm.stop()
+}
+
+# unfortunately we need to implement timing from scratch here
+# as it's not clear how MPI plays with R's environments
+times <- double(5)
+
+for (ix in 1:5) {
+    barrier()
+    a <- Sys.time()
+
+    res <- eval(parse(text=call))
+
+    barrier()
+    b <- Sys.time()
+    times[ix] <- b - a
+}
+
+if (comm.rank() == 0) {
+    rows <- nrow(M)
+    cols <- ncol(M)
+    path <- paste('../output/', outdir,
+                  '/R_', mattype, '_',
+                  opType, nodes,
+                  '.txt', sep='')
+
+    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
+    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
+    names(runTimes) <- colnames
+
+    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
+    runTimes[1, 4:ncol(runTimes)] <- times
+    writeHeader <- if (!file.exists(path)) TRUE else FALSE
+    write.table(runTimes,
+                path,
+                append = TRUE,
+                row.names = FALSE,
+                col.names = writeHeader,
+                sep = ',')
+}
+
+finalize()
+
+Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M16_tall.csv Npath=../external/disk_data/N16_tall.csv wPath=../external/disk_data/w16_tall.csv tableStub=16_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=16
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+ make.py ended: 2018-01-05 02:57:33

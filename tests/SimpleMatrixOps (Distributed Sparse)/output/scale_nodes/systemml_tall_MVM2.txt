@@ -1,0 +1,2 @@
+nodes,sr,time1,time2,time3,time4,time5
+2,01,7.019,4.696,9.675,4.658,8.416

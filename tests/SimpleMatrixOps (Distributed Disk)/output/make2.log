@@ -1,0 +1,2019 @@
+
+ make.py started: 2018-01-30 05:35:03 /home/ubuntu/benchmark/tests/SimpleMatrixOps (Distributed Disk)/src 
+
+
+name := "SystemMLMatrixOps"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq(
+    "org.apache.spark"     % "spark-sql_2.11"  % "2.1.1" % "provided"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+name := "MLLibMatrixops"
+
+version := "0.1"
+
+scalaVersion := "2.10.4"
+
+libraryDependencies ++= Seq (
+    "org.apache.spark" %% "spark-core" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-streaming" % "2.2.0" % "provided",
+    "org.apache.spark" %% "spark-mllib" % "2.2.0" % "provided",
+    "com.github.fommil.netlib" % "all" % "1.1.2"
+)
+
+assemblyMergeStrategy in assembly := {
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.last
+  case PathList("javax", "activation", xs @ _*) => MergeStrategy.last
+  case PathList("org", "apache", xs @ _*) => MergeStrategy.last
+  case PathList("com", "google", xs @ _*) => MergeStrategy.last
+  case PathList("com", "esotericsoftware", xs @ _*) => MergeStrategy.last
+  case PathList("com", "codahale", xs @ _*) => MergeStrategy.last
+  case PathList("com", "yammer", xs @ _*) => MergeStrategy.last
+  case "about.html" => MergeStrategy.rename
+  case "META-INF/ECLIPSEF.RSA" => MergeStrategy.last
+  case "META-INF/mailcap" => MergeStrategy.last
+  case "META-INF/mimetypes.default" => MergeStrategy.last
+  case "plugin.properties" => MergeStrategy.last
+  case "log4j.properties" => MergeStrategy.last
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
+
+Running: sbt -Dsbt.log.noformat=true assembly 
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+import os
+import sys
+
+sys.path.append('../external/lib/python')
+import make_utils as utils
+import global_params as params
+import gen_data as data
+
+nodes = sys.argv[1]
+matsize = sys.argv[2].split(' ')
+systems = sys.argv[3].split(' ')
+ops = ['NORM','MVM','ADD','TRANS','TSM']
+#ops = ['NORM','MVM','ADD','TRANS','GMM','TSM']
+
+if len(matsize) > 1:
+    raise StandardError('matsize must be a scalar')
+
+matsize = matsize[0]
+
+#all_files = os.listdir('../output/scale_nodes')
+#for s in systems:
+#    for op in ops:
+#        relevant_files = filter(
+#            lambda x: (s in x) and (op in x) and (nodes in x), all_files)
+#        map(lambda x:  os.unlink('../output/scale_nodes/{}'.format(x)), 
+#             relevant_files)
+
+cmd_args = ('opType={opType} mattype={mattype}'
+            ' Mpath={Mpath} Npath={Npath}'
+            ' wPath={wPath} tableStub={tableStub}'
+            ' nodes={nodes} passPath=/scratch/pass.csv'
+            ' outdir=scale_nodes')
+
+data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
+utils.hdfs_put('../temp/pass.csv')
+for op in ops:
+    mattype_m = 'tall' if op != 'GMM' else 'wide'
+    mattype_n = 'tall'
+
+    Mpath_disk = '../external/disk_data/M{}_{}.csv'.format(matsize,mattype_m)
+    wPath_disk = '../external/disk_data/w{}_{}.csv'.format(matsize,mattype_m)
+    Npath_disk = '../external/disk_data/N{}_{}.csv'.format(matsize,mattype_n)
+    if op == 'GMM':
+        NPath_disk = '../external/disk_data/M{}_tall.csv'.format(matsize)
+
+    Mpath_hdfs = Mpath_disk.replace('../external/disk_data', '/scratch')
+    wPath_hdfs = wPath_disk.replace('../external/disk_data', '/scratch')
+    Npath_hdfs = Npath_disk.replace('../external/disk_data', '/scratch')
+
+    cmd_params_disk = {'mattype' : mattype_m,
+               'Mpath'   : Mpath_disk,
+               'wPath'   : wPath_disk,
+               'Npath'   : Npath_disk,
+               'nodes'   : nodes,
+               'tableStub' : '{}_{}'.format(matsize, mattype_m)}
+    cmd_params_hdfs = {'mattype' : mattype_m,
+               'Mpath'   : Mpath_hdfs,
+               'wPath'   : wPath_hdfs,
+               'Npath'   : Npath_hdfs,
+               'nodes'   : nodes,
+               'tableStub' : '{}_{}'.format(matsize, mattype_m)}
+
+    cmd_params_disk['opType'] = op
+    cmd_params_hdfs['opType'] = op
+    args_disk = cmd_args.format(**cmd_params_disk)
+    args_hdfs = cmd_args.format(**cmd_params_hdfs)
+
+    if 'SYSML' in systems:
+        utils.run_spark(program='SystemMLMatrixOps',
+                        sbt_dir='./systemml',
+                        cmd_args = args_hdfs)
+    if 'MLLIB' in systems:
+        utils.run_spark(program = 'SparkMatrixOps',
+                    sbt_dir = './mllib',
+                    cmd_args = args_hdfs)
+    if 'MADLIB' in systems:
+        utils.run_python(program = 'madlib_matrix_ops.py',
+                           cmd_args = args_disk)
+    if 'R' in systems:
+        utils.run_pbdR(program = 'R_matrix_ops.R',
+                      cmd_args = args_disk)
+
+Running: python _node_scaling_tests.py 2 "16" "MLLIB SYSML"
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "LMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('$Npath')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "LMM" => s"N = rand(rows=ncol(M), cols=ncol(M))"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "LMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "print(as.scalar(R[1,1]))"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!File(path).exists)
+            File(path).writeAll(
+              "nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('${libDir}')
+          | time = externalFunction(Integer i) return (Double B)
+          |      implemented in (classname="org.apache.sysml.udf.lib.TimeWrapper", exectype="mem");
+          |
+          | t = time(1)
+          | print("Time " + t)
+          | M = read(Mpath)
+          | K = sum(M)
+          | print(K)
+          | ${allocOp}
+          | ${extraPrintOp}
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0) {
+          |       start = time(1)
+          |   }
+          |
+          |   R = ${opString}
+          |   if (K > 0) {
+          |       ${printOp}
+          |   }
+          |   if (K > 0) {
+          |       stop = time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000.0
+          | }
+          |
+          | results = matrix(0.0, 1, 7)
+          | results[1,1] = nrow(M)
+          | results[1,2] = ncol(M)
+          | results[1,3:7] = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("results")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("results")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import breeze.{linalg => bAlg, numerics => bNum}
+import breeze.linalg.{Vector => bVector,
+                      Matrix => bMatrix,
+                      SparseVector => bSparseVector,
+                      DenseVector => bDenseVector,
+                      CSCMatrix => bSparseMatrix,
+                      DenseMatrix => bDenseMatrix}
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkMatrixOps {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibMatrixOps")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+        println(com.github.fommil.netlib.BLAS.getInstance().getClass().getName())
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "TRANS" => doBlockMatrixOp(mPath, nPath, passPath, "TRANS", sc)
+            case "GMM"   => doBlockMatrixOp(mPath, nPath, passPath, "GMM", sc)
+            case "ADD"   => doRowMatrixOp(mPath, nPath, "ADD", sc)
+            case "NORM"  => doRowMatrixOp(mPath, passPath, "NORM", sc)
+            case "MVM"   => doRowMatrixOp(mPath, passPath, "MVM", sc)
+            case "LMM"   => doRowMatrixOp(mPath, passPath, "LMM", sc)
+            case "TSM"   => doRowMatrixOp(mPath, passPath, "TSM", sc)
+            case _       => Array[Double](0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doBlockMatrixOp(mPath: String,
+                        nPath: String,
+                        passPath: String,
+                        opType: String,
+                        sc: SparkContext) : Array[Double] = {
+        val M = readMM(mPath, sc).toBlockMatrix(100,100)
+        val rows = M.numRows()
+        val cols = M.numCols()
+
+        val N : BlockMatrix = opType match {
+            case "GMM" => readMM(nPath, sc).toBlockMatrix(100,100)
+            case _     => readMM(passPath, sc).toBlockMatrix(100,100)
+        }
+        N.blocks.count
+        N.blocks.persist(MEMORY_AND_DISK_SER)
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            println(s"Test => ${ix}")
+            val start = System.nanoTime()
+            if (opType == "GMM") {
+                val res = M.multiply( N, 500 )
+                res.blocks.count
+            } else if (opType == "TRANS") {
+                val res = M.transpose
+                res.blocks.count
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      Npath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        val N = opType match {
+            case "MVM" => random_local_matrix(M.numCols.toInt, 1, .10)
+            case _     => random_local_matrix(1, 1, .10)
+        }
+        val N_dist = readMM(Npath, sc)
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "MVM") {
+                val res = M.multiply( N )
+                res.rows.count
+            } else if (opType == "ADD") {
+                val res = add_row_matrices(M, N_dist)
+                res.rows.count
+            } else if (opType == "TSM") {
+                M.computeGramianMatrix
+            } else if (opType == "NORM") {
+                println(norm( M ))
+            } 
+
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def densify(M: BlockMatrix) : BlockMatrix = {
+        return new BlockMatrix(
+            M.blocks.map(
+                {case ((x,y),M) => 
+                   ((x,y),M.asInstanceOf[SparseMatrix].
+                          toDense.asInstanceOf[Matrix])}),
+           M.rowsPerBlock, M.colsPerBlock)
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+    // Spark annoyingly does not expose any of these primitive methods
+    // which makes their library not very useful
+    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
+        case v: linalg.SparseVector =>
+            return new bSparseVector[Double](v.indices, v.values, v.size)
+        case v: linalg.DenseVector  =>
+            return new bDenseVector[Double](v.values)
+    }
+
+    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
+        case v: bSparseVector[Double] =>
+            return Vectors.sparse(v.length, v.activeIterator.toSeq)
+        case v: bDenseVector[Double] =>
+            return Vectors.dense(v.data)
+    }
+
+    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
+        case m: linalg.DenseMatrix =>
+            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
+        case m: linalg.SparseMatrix =>
+            return new bSparseMatrix(
+                m.values, m.numRows, m.numCols,
+                m.colPtrs, m.numActives, m.rowIndices)
+    }
+
+    def add_row_matrices(A: IndexedRowMatrix, 
+                         B: IndexedRowMatrix) : IndexedRowMatrix = {
+        val both = join_row_matrices(A, B)
+        return new IndexedRowMatrix(
+            both.map(tup => new IndexedRow(tup._1,
+                from_breeze(as_breeze(tup._2._1) + as_breeze(tup._2._2)))))
+    }
+
+    def join_row_matrices(A: IndexedRowMatrix,
+                          B: IndexedRowMatrix) :
+            RDD[(Long, (linalg.Vector,linalg.Vector))] = {
+        val pair_A = A.rows.map(row => (row.index, row.vector))
+        val pair_B = B.rows.map(row => (row.index, row.vector))
+        return pair_A.join(pair_B)
+    }
+
+    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
+          case m: bDenseMatrix[Double] =>
+            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
+        case m: bSparseMatrix[Double] =>
+            return Matrices.sparse(m.rows, m.cols,
+                    m.colPtrs, m.rowIndices, m.data)
+    }
+
+    def random_local_matrix(rows: Int, cols: Int, den: Double) : Matrix = {
+        val rng = new Random()
+        return Matrices.rand(rows, cols, rng)
+    }
+
+    def norm(M: IndexedRowMatrix) : Double = {
+        val temp = M.rows.map(
+            row => bAlg.sum(bNum.pow(as_breeze(row.vector),2)))
+        val norm = sqrt(temp.sum)
+        return norm
+    }
+
+    def mean(A: Array[Double]) : Double = {
+        return A.sum / A.length
+    }
+
+    def variance(A: Array[Double]) : Double = {
+        val abar = mean(A)
+        val accum = A.map(e => pow(e-abar,2)).sum
+        return accum / (A.length - 1)
+    }
+}
+
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "LMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('$Npath')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "LMM" => s"N = rand(rows=ncol(M), cols=ncol(M))"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "LMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "print(as.scalar(R[1,1]))"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!File(path).exists)
+            File(path).writeAll(
+              "nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('${libDir}')
+          | time = externalFunction(Integer i) return (Double B)
+          |      implemented in (classname="org.apache.sysml.udf.lib.TimeWrapper", exectype="mem");
+          |
+          | t = time(1)
+          | print("Time " + t)
+          | M = read(Mpath)
+          | K = sum(M)
+          | print(K)
+          | ${allocOp}
+          | ${extraPrintOp}
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0) {
+          |       start = time(1)
+          |   }
+          |
+          |   R = ${opString}
+          |   if (K > 0) {
+          |       ${printOp}
+          |   }
+          |   if (K > 0) {
+          |       stop = time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000.0
+          | }
+          |
+          | results = matrix(0.0, 1, 7)
+          | results[1,1] = nrow(M)
+          | results[1,2] = ncol(M)
+          | results[1,3:7] = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("results")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("results")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import breeze.{linalg => bAlg, numerics => bNum}
+import breeze.linalg.{Vector => bVector,
+                      Matrix => bMatrix,
+                      SparseVector => bSparseVector,
+                      DenseVector => bDenseVector,
+                      CSCMatrix => bSparseMatrix,
+                      DenseMatrix => bDenseMatrix}
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkMatrixOps {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibMatrixOps")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+        println(com.github.fommil.netlib.BLAS.getInstance().getClass().getName())
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "TRANS" => doBlockMatrixOp(mPath, nPath, passPath, "TRANS", sc)
+            case "GMM"   => doBlockMatrixOp(mPath, nPath, passPath, "GMM", sc)
+            case "ADD"   => doRowMatrixOp(mPath, nPath, "ADD", sc)
+            case "NORM"  => doRowMatrixOp(mPath, passPath, "NORM", sc)
+            case "MVM"   => doRowMatrixOp(mPath, passPath, "MVM", sc)
+            case "LMM"   => doRowMatrixOp(mPath, passPath, "LMM", sc)
+            case "TSM"   => doRowMatrixOp(mPath, passPath, "TSM", sc)
+            case _       => Array[Double](0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doBlockMatrixOp(mPath: String,
+                        nPath: String,
+                        passPath: String,
+                        opType: String,
+                        sc: SparkContext) : Array[Double] = {
+        val M = readMM(mPath, sc).toBlockMatrix(100,100)
+        val rows = M.numRows()
+        val cols = M.numCols()
+
+        val N : BlockMatrix = opType match {
+            case "GMM" => readMM(nPath, sc).toBlockMatrix(100,100)
+            case _     => readMM(passPath, sc).toBlockMatrix(100,100)
+        }
+        N.blocks.count
+        N.blocks.persist(MEMORY_AND_DISK_SER)
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            println(s"Test => ${ix}")
+            val start = System.nanoTime()
+            if (opType == "GMM") {
+                val res = M.multiply( N, 500 )
+                res.blocks.count
+            } else if (opType == "TRANS") {
+                val res = M.transpose
+                res.blocks.count
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      Npath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        val N = opType match {
+            case "MVM" => random_local_matrix(M.numCols.toInt, 1, .10)
+            case _     => random_local_matrix(1, 1, .10)
+        }
+        val N_dist = readMM(Npath, sc)
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "MVM") {
+                val res = M.multiply( N )
+                res.rows.count
+            } else if (opType == "ADD") {
+                val res = add_row_matrices(M, N_dist)
+                res.rows.count
+            } else if (opType == "TSM") {
+                M.computeGramianMatrix
+            } else if (opType == "NORM") {
+                println(norm( M ))
+            } 
+
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def densify(M: BlockMatrix) : BlockMatrix = {
+        return new BlockMatrix(
+            M.blocks.map(
+                {case ((x,y),M) => 
+                   ((x,y),M.asInstanceOf[SparseMatrix].
+                          toDense.asInstanceOf[Matrix])}),
+           M.rowsPerBlock, M.colsPerBlock)
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+    // Spark annoyingly does not expose any of these primitive methods
+    // which makes their library not very useful
+    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
+        case v: linalg.SparseVector =>
+            return new bSparseVector[Double](v.indices, v.values, v.size)
+        case v: linalg.DenseVector  =>
+            return new bDenseVector[Double](v.values)
+    }
+
+    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
+        case v: bSparseVector[Double] =>
+            return Vectors.sparse(v.length, v.activeIterator.toSeq)
+        case v: bDenseVector[Double] =>
+            return Vectors.dense(v.data)
+    }
+
+    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
+        case m: linalg.DenseMatrix =>
+            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
+        case m: linalg.SparseMatrix =>
+            return new bSparseMatrix(
+                m.values, m.numRows, m.numCols,
+                m.colPtrs, m.numActives, m.rowIndices)
+    }
+
+    def add_row_matrices(A: IndexedRowMatrix, 
+                         B: IndexedRowMatrix) : IndexedRowMatrix = {
+        val both = join_row_matrices(A, B)
+        return new IndexedRowMatrix(
+            both.map(tup => new IndexedRow(tup._1,
+                from_breeze(as_breeze(tup._2._1) + as_breeze(tup._2._2)))))
+    }
+
+    def join_row_matrices(A: IndexedRowMatrix,
+                          B: IndexedRowMatrix) :
+            RDD[(Long, (linalg.Vector,linalg.Vector))] = {
+        val pair_A = A.rows.map(row => (row.index, row.vector))
+        val pair_B = B.rows.map(row => (row.index, row.vector))
+        return pair_A.join(pair_B)
+    }
+
+    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
+          case m: bDenseMatrix[Double] =>
+            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
+        case m: bSparseMatrix[Double] =>
+            return Matrices.sparse(m.rows, m.cols,
+                    m.colPtrs, m.rowIndices, m.data)
+    }
+
+    def random_local_matrix(rows: Int, cols: Int, den: Double) : Matrix = {
+        val rng = new Random()
+        return Matrices.rand(rows, cols, rng)
+    }
+
+    def norm(M: IndexedRowMatrix) : Double = {
+        val temp = M.rows.map(
+            row => bAlg.sum(bNum.pow(as_breeze(row.vector),2)))
+        val norm = sqrt(temp.sum)
+        return norm
+    }
+
+    def mean(A: Array[Double]) : Double = {
+        return A.sum / A.length
+    }
+
+    def variance(A: Array[Double]) : Double = {
+        val abar = mean(A)
+        val accum = A.map(e => pow(e-abar,2)).sum
+        return accum / (A.length - 1)
+    }
+}
+
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "LMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('$Npath')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "LMM" => s"N = rand(rows=ncol(M), cols=ncol(M))"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "LMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "print(as.scalar(R[1,1]))"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!File(path).exists)
+            File(path).writeAll(
+              "nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('${libDir}')
+          | time = externalFunction(Integer i) return (Double B)
+          |      implemented in (classname="org.apache.sysml.udf.lib.TimeWrapper", exectype="mem");
+          |
+          | t = time(1)
+          | print("Time " + t)
+          | M = read(Mpath)
+          | K = sum(M)
+          | print(K)
+          | ${allocOp}
+          | ${extraPrintOp}
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0) {
+          |       start = time(1)
+          |   }
+          |
+          |   R = ${opString}
+          |   if (K > 0) {
+          |       ${printOp}
+          |   }
+          |   if (K > 0) {
+          |       stop = time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000.0
+          | }
+          |
+          | results = matrix(0.0, 1, 7)
+          | results[1,1] = nrow(M)
+          | results[1,2] = ncol(M)
+          | results[1,3:7] = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("results")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("results")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import breeze.{linalg => bAlg, numerics => bNum}
+import breeze.linalg.{Vector => bVector,
+                      Matrix => bMatrix,
+                      SparseVector => bSparseVector,
+                      DenseVector => bDenseVector,
+                      CSCMatrix => bSparseMatrix,
+                      DenseMatrix => bDenseMatrix}
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkMatrixOps {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibMatrixOps")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+        println(com.github.fommil.netlib.BLAS.getInstance().getClass().getName())
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "TRANS" => doBlockMatrixOp(mPath, nPath, passPath, "TRANS", sc)
+            case "GMM"   => doBlockMatrixOp(mPath, nPath, passPath, "GMM", sc)
+            case "ADD"   => doRowMatrixOp(mPath, nPath, "ADD", sc)
+            case "NORM"  => doRowMatrixOp(mPath, passPath, "NORM", sc)
+            case "MVM"   => doRowMatrixOp(mPath, passPath, "MVM", sc)
+            case "LMM"   => doRowMatrixOp(mPath, passPath, "LMM", sc)
+            case "TSM"   => doRowMatrixOp(mPath, passPath, "TSM", sc)
+            case _       => Array[Double](0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doBlockMatrixOp(mPath: String,
+                        nPath: String,
+                        passPath: String,
+                        opType: String,
+                        sc: SparkContext) : Array[Double] = {
+        val M = readMM(mPath, sc).toBlockMatrix(100,100)
+        val rows = M.numRows()
+        val cols = M.numCols()
+
+        val N : BlockMatrix = opType match {
+            case "GMM" => readMM(nPath, sc).toBlockMatrix(100,100)
+            case _     => readMM(passPath, sc).toBlockMatrix(100,100)
+        }
+        N.blocks.count
+        N.blocks.persist(MEMORY_AND_DISK_SER)
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            println(s"Test => ${ix}")
+            val start = System.nanoTime()
+            if (opType == "GMM") {
+                val res = M.multiply( N, 500 )
+                res.blocks.count
+            } else if (opType == "TRANS") {
+                val res = M.transpose
+                res.blocks.count
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      Npath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        val N = opType match {
+            case "MVM" => random_local_matrix(M.numCols.toInt, 1, .10)
+            case _     => random_local_matrix(1, 1, .10)
+        }
+        val N_dist = readMM(Npath, sc)
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "MVM") {
+                val res = M.multiply( N )
+                res.rows.count
+            } else if (opType == "ADD") {
+                val res = add_row_matrices(M, N_dist)
+                res.rows.count
+            } else if (opType == "TSM") {
+                M.computeGramianMatrix
+            } else if (opType == "NORM") {
+                println(norm( M ))
+            } 
+
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def densify(M: BlockMatrix) : BlockMatrix = {
+        return new BlockMatrix(
+            M.blocks.map(
+                {case ((x,y),M) => 
+                   ((x,y),M.asInstanceOf[SparseMatrix].
+                          toDense.asInstanceOf[Matrix])}),
+           M.rowsPerBlock, M.colsPerBlock)
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+    // Spark annoyingly does not expose any of these primitive methods
+    // which makes their library not very useful
+    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
+        case v: linalg.SparseVector =>
+            return new bSparseVector[Double](v.indices, v.values, v.size)
+        case v: linalg.DenseVector  =>
+            return new bDenseVector[Double](v.values)
+    }
+
+    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
+        case v: bSparseVector[Double] =>
+            return Vectors.sparse(v.length, v.activeIterator.toSeq)
+        case v: bDenseVector[Double] =>
+            return Vectors.dense(v.data)
+    }
+
+    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
+        case m: linalg.DenseMatrix =>
+            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
+        case m: linalg.SparseMatrix =>
+            return new bSparseMatrix(
+                m.values, m.numRows, m.numCols,
+                m.colPtrs, m.numActives, m.rowIndices)
+    }
+
+    def add_row_matrices(A: IndexedRowMatrix, 
+                         B: IndexedRowMatrix) : IndexedRowMatrix = {
+        val both = join_row_matrices(A, B)
+        return new IndexedRowMatrix(
+            both.map(tup => new IndexedRow(tup._1,
+                from_breeze(as_breeze(tup._2._1) + as_breeze(tup._2._2)))))
+    }
+
+    def join_row_matrices(A: IndexedRowMatrix,
+                          B: IndexedRowMatrix) :
+            RDD[(Long, (linalg.Vector,linalg.Vector))] = {
+        val pair_A = A.rows.map(row => (row.index, row.vector))
+        val pair_B = B.rows.map(row => (row.index, row.vector))
+        return pair_A.join(pair_B)
+    }
+
+    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
+          case m: bDenseMatrix[Double] =>
+            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
+        case m: bSparseMatrix[Double] =>
+            return Matrices.sparse(m.rows, m.cols,
+                    m.colPtrs, m.rowIndices, m.data)
+    }
+
+    def random_local_matrix(rows: Int, cols: Int, den: Double) : Matrix = {
+        val rng = new Random()
+        return Matrices.rand(rows, cols, rng)
+    }
+
+    def norm(M: IndexedRowMatrix) : Double = {
+        val temp = M.rows.map(
+            row => bAlg.sum(bNum.pow(as_breeze(row.vector),2)))
+        val norm = sqrt(temp.sum)
+        return norm
+    }
+
+    def mean(A: Array[Double]) : Double = {
+        return A.sum / A.length
+    }
+
+    def variance(A: Array[Double]) : Double = {
+        val abar = mean(A)
+        val accum = A.map(e => pow(e-abar,2)).sum
+        return accum / (A.length - 1)
+    }
+}
+
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "LMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('$Npath')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "LMM" => s"N = rand(rows=ncol(M), cols=ncol(M))"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "LMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "print(as.scalar(R[1,1]))"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!File(path).exists)
+            File(path).writeAll(
+              "nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('${libDir}')
+          | time = externalFunction(Integer i) return (Double B)
+          |      implemented in (classname="org.apache.sysml.udf.lib.TimeWrapper", exectype="mem");
+          |
+          | t = time(1)
+          | print("Time " + t)
+          | M = read(Mpath)
+          | K = sum(M)
+          | print(K)
+          | ${allocOp}
+          | ${extraPrintOp}
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0) {
+          |       start = time(1)
+          |   }
+          |
+          |   R = ${opString}
+          |   if (K > 0) {
+          |       ${printOp}
+          |   }
+          |   if (K > 0) {
+          |       stop = time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000.0
+          | }
+          |
+          | results = matrix(0.0, 1, 7)
+          | results[1,1] = nrow(M)
+          | results[1,2] = ncol(M)
+          | results[1,3:7] = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("results")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("results")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import breeze.{linalg => bAlg, numerics => bNum}
+import breeze.linalg.{Vector => bVector,
+                      Matrix => bMatrix,
+                      SparseVector => bSparseVector,
+                      DenseVector => bDenseVector,
+                      CSCMatrix => bSparseMatrix,
+                      DenseMatrix => bDenseMatrix}
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkMatrixOps {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibMatrixOps")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+        println(com.github.fommil.netlib.BLAS.getInstance().getClass().getName())
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "TRANS" => doBlockMatrixOp(mPath, nPath, passPath, "TRANS", sc)
+            case "GMM"   => doBlockMatrixOp(mPath, nPath, passPath, "GMM", sc)
+            case "ADD"   => doRowMatrixOp(mPath, nPath, "ADD", sc)
+            case "NORM"  => doRowMatrixOp(mPath, passPath, "NORM", sc)
+            case "MVM"   => doRowMatrixOp(mPath, passPath, "MVM", sc)
+            case "LMM"   => doRowMatrixOp(mPath, passPath, "LMM", sc)
+            case "TSM"   => doRowMatrixOp(mPath, passPath, "TSM", sc)
+            case _       => Array[Double](0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doBlockMatrixOp(mPath: String,
+                        nPath: String,
+                        passPath: String,
+                        opType: String,
+                        sc: SparkContext) : Array[Double] = {
+        val M = readMM(mPath, sc).toBlockMatrix(100,100)
+        val rows = M.numRows()
+        val cols = M.numCols()
+
+        val N : BlockMatrix = opType match {
+            case "GMM" => readMM(nPath, sc).toBlockMatrix(100,100)
+            case _     => readMM(passPath, sc).toBlockMatrix(100,100)
+        }
+        N.blocks.count
+        N.blocks.persist(MEMORY_AND_DISK_SER)
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            println(s"Test => ${ix}")
+            val start = System.nanoTime()
+            if (opType == "GMM") {
+                val res = M.multiply( N, 500 )
+                res.blocks.count
+            } else if (opType == "TRANS") {
+                val res = M.transpose
+                res.blocks.count
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      Npath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        val N = opType match {
+            case "MVM" => random_local_matrix(M.numCols.toInt, 1, .10)
+            case _     => random_local_matrix(1, 1, .10)
+        }
+        val N_dist = readMM(Npath, sc)
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "MVM") {
+                val res = M.multiply( N )
+                res.rows.count
+            } else if (opType == "ADD") {
+                val res = add_row_matrices(M, N_dist)
+                res.rows.count
+            } else if (opType == "TSM") {
+                M.computeGramianMatrix
+            } else if (opType == "NORM") {
+                println(norm( M ))
+            } 
+
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def densify(M: BlockMatrix) : BlockMatrix = {
+        return new BlockMatrix(
+            M.blocks.map(
+                {case ((x,y),M) => 
+                   ((x,y),M.asInstanceOf[SparseMatrix].
+                          toDense.asInstanceOf[Matrix])}),
+           M.rowsPerBlock, M.colsPerBlock)
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+    // Spark annoyingly does not expose any of these primitive methods
+    // which makes their library not very useful
+    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
+        case v: linalg.SparseVector =>
+            return new bSparseVector[Double](v.indices, v.values, v.size)
+        case v: linalg.DenseVector  =>
+            return new bDenseVector[Double](v.values)
+    }
+
+    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
+        case v: bSparseVector[Double] =>
+            return Vectors.sparse(v.length, v.activeIterator.toSeq)
+        case v: bDenseVector[Double] =>
+            return Vectors.dense(v.data)
+    }
+
+    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
+        case m: linalg.DenseMatrix =>
+            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
+        case m: linalg.SparseMatrix =>
+            return new bSparseMatrix(
+                m.values, m.numRows, m.numCols,
+                m.colPtrs, m.numActives, m.rowIndices)
+    }
+
+    def add_row_matrices(A: IndexedRowMatrix, 
+                         B: IndexedRowMatrix) : IndexedRowMatrix = {
+        val both = join_row_matrices(A, B)
+        return new IndexedRowMatrix(
+            both.map(tup => new IndexedRow(tup._1,
+                from_breeze(as_breeze(tup._2._1) + as_breeze(tup._2._2)))))
+    }
+
+    def join_row_matrices(A: IndexedRowMatrix,
+                          B: IndexedRowMatrix) :
+            RDD[(Long, (linalg.Vector,linalg.Vector))] = {
+        val pair_A = A.rows.map(row => (row.index, row.vector))
+        val pair_B = B.rows.map(row => (row.index, row.vector))
+        return pair_A.join(pair_B)
+    }
+
+    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
+          case m: bDenseMatrix[Double] =>
+            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
+        case m: bSparseMatrix[Double] =>
+            return Matrices.sparse(m.rows, m.cols,
+                    m.colPtrs, m.rowIndices, m.data)
+    }
+
+    def random_local_matrix(rows: Int, cols: Int, den: Double) : Matrix = {
+        val rng = new Random()
+        return Matrices.rand(rows, cols, rng)
+    }
+
+    def norm(M: IndexedRowMatrix) : Double = {
+        val temp = M.rows.map(
+            row => bAlg.sum(bNum.pow(as_breeze(row.vector),2)))
+        val norm = sqrt(temp.sum)
+        return norm
+    }
+
+    def mean(A: Array[Double]) : Double = {
+        return A.sum / A.length
+    }
+
+    def variance(A: Array[Double]) : Double = {
+        val abar = mean(A)
+        val accum = A.map(e => pow(e-abar,2)).sum
+        return accum / (A.length - 1)
+    }
+}
+
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./systemml/src/main/scala/systemml_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.collection.immutable._
+
+object SystemMLMatrixOps extends App {
+
+    override def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("SystemMLMatrixOps")
+        val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        var stub = "/tests/SimpleMatrixOps (Single Node Disk)/"
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val Mpath = argMap("Mpath")
+        val Npath = argMap("Npath")
+        val wPath = argMap("wPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        println("Evaluating: " + opType)
+
+        val opString = opType match {
+            case "TRANS" => "t(M)"
+            case "NORM"  => "sqrt(sum(M^2))"
+            case "GMM"   => "M %*% N"
+            case "LMM"   => "M %*% N"
+            case "MVM"   => "M %*% w"
+            case "TSM"   => "t(M) %*% M"
+            case "ADD"   => "M + N"
+            case _       => println("Invalid operation")
+        }
+
+        val allocOp = opType match {
+            case "GMM" => s"N = read('$Npath')"
+            case "MVM" => s"w = rand(rows=ncol(M), cols=1)"
+            case "LMM" => s"N = rand(rows=ncol(M), cols=ncol(M))"
+            case "ADD" => s"N = read('${Npath}')"
+            case _     => ""
+        }
+
+        val extraPrintOp = opType match {
+            case "GMM" => s"print(sum(N))"
+            case "LMM" => s"print(sum(N))"
+            case "MVM" => s"print(sum(w))"
+            case _     => ""
+        }
+
+        val printOp = opType match {
+            case "NORM" => "print(R)"
+            case _      => "print(as.scalar(R[1,1]))"
+        }
+
+        stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!File(path).exists)
+            File(path).writeAll(
+              "nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        val libDir = root + "/lib/dml"
+        val dmlText =
+        s"""
+          | setwd('${libDir}')
+          | time = externalFunction(Integer i) return (Double B)
+          |      implemented in (classname="org.apache.sysml.udf.lib.TimeWrapper", exectype="mem");
+          |
+          | t = time(1)
+          | print("Time " + t)
+          | M = read(Mpath)
+          | K = sum(M)
+          | print(K)
+          | ${allocOp}
+          | ${extraPrintOp}
+          | times = matrix(0.0, rows = 5, cols = 1)
+          | for (ix in 1:5) {
+          |   if (K > 0) {
+          |       start = time(1)
+          |   }
+          |
+          |   R = ${opString}
+          |   if (K > 0) {
+          |       ${printOp}
+          |   }
+          |   if (K > 0) {
+          |       stop = time(1)
+          |   }
+          |   times[ix,1] = (stop - start) / 1000.0
+          | }
+          |
+          | results = matrix(0.0, 1, 7)
+          | results[1,1] = nrow(M)
+          | results[1,2] = ncol(M)
+          | results[1,3:7] = t(times)
+        """.stripMargin
+        println("Executing DML: ")
+        println(dmlText)
+
+        val script = dml(dmlText).
+                     in("Mpath", Mpath).
+                     out("results")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("results")._1.to2DDoubleArray
+        File(path).appendAll(
+            nodes + "," + results(0).mkString(",") + '\n')
+    }
+}
+
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import breeze.{linalg => bAlg, numerics => bNum}
+import breeze.linalg.{Vector => bVector,
+                      Matrix => bMatrix,
+                      SparseVector => bSparseVector,
+                      DenseVector => bDenseVector,
+                      CSCMatrix => bSparseMatrix,
+                      DenseMatrix => bDenseMatrix}
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkMatrixOps {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibMatrixOps")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+        println(com.github.fommil.netlib.BLAS.getInstance().getClass().getName())
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/SimpleMatrixOps (Distributed Disk)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "TRANS" => doBlockMatrixOp(mPath, nPath, passPath, "TRANS", sc)
+            case "GMM"   => doBlockMatrixOp(mPath, nPath, passPath, "GMM", sc)
+            case "ADD"   => doRowMatrixOp(mPath, nPath, "ADD", sc)
+            case "NORM"  => doRowMatrixOp(mPath, passPath, "NORM", sc)
+            case "MVM"   => doRowMatrixOp(mPath, passPath, "MVM", sc)
+            case "LMM"   => doRowMatrixOp(mPath, passPath, "LMM", sc)
+            case "TSM"   => doRowMatrixOp(mPath, passPath, "TSM", sc)
+            case _       => Array[Double](0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doBlockMatrixOp(mPath: String,
+                        nPath: String,
+                        passPath: String,
+                        opType: String,
+                        sc: SparkContext) : Array[Double] = {
+        val M = readMM(mPath, sc).toBlockMatrix(100,100)
+        val rows = M.numRows()
+        val cols = M.numCols()
+
+        val N : BlockMatrix = opType match {
+            case "GMM" => readMM(nPath, sc).toBlockMatrix(100,100)
+            case _     => readMM(passPath, sc).toBlockMatrix(100,100)
+        }
+        N.blocks.count
+        N.blocks.persist(MEMORY_AND_DISK_SER)
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            println(s"Test => ${ix}")
+            val start = System.nanoTime()
+            if (opType == "GMM") {
+                val res = M.multiply( N, 500 )
+                res.blocks.count
+            } else if (opType == "TRANS") {
+                val res = M.transpose
+                res.blocks.count
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      Npath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        val N = opType match {
+            case "MVM" => random_local_matrix(M.numCols.toInt, 1, .10)
+            case _     => random_local_matrix(1, 1, .10)
+        }
+        val N_dist = readMM(Npath, sc)
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "MVM") {
+                val res = M.multiply( N )
+                res.rows.count
+            } else if (opType == "ADD") {
+                val res = add_row_matrices(M, N_dist)
+                res.rows.count
+            } else if (opType == "TSM") {
+                M.computeGramianMatrix
+            } else if (opType == "NORM") {
+                println(norm( M ))
+            } 
+
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def densify(M: BlockMatrix) : BlockMatrix = {
+        return new BlockMatrix(
+            M.blocks.map(
+                {case ((x,y),M) => 
+                   ((x,y),M.asInstanceOf[SparseMatrix].
+                          toDense.asInstanceOf[Matrix])}),
+           M.rowsPerBlock, M.colsPerBlock)
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+    // Spark annoyingly does not expose any of these primitive methods
+    // which makes their library not very useful
+    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
+        case v: linalg.SparseVector =>
+            return new bSparseVector[Double](v.indices, v.values, v.size)
+        case v: linalg.DenseVector  =>
+            return new bDenseVector[Double](v.values)
+    }
+
+    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
+        case v: bSparseVector[Double] =>
+            return Vectors.sparse(v.length, v.activeIterator.toSeq)
+        case v: bDenseVector[Double] =>
+            return Vectors.dense(v.data)
+    }
+
+    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
+        case m: linalg.DenseMatrix =>
+            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
+        case m: linalg.SparseMatrix =>
+            return new bSparseMatrix(
+                m.values, m.numRows, m.numCols,
+                m.colPtrs, m.numActives, m.rowIndices)
+    }
+
+    def add_row_matrices(A: IndexedRowMatrix, 
+                         B: IndexedRowMatrix) : IndexedRowMatrix = {
+        val both = join_row_matrices(A, B)
+        return new IndexedRowMatrix(
+            both.map(tup => new IndexedRow(tup._1,
+                from_breeze(as_breeze(tup._2._1) + as_breeze(tup._2._2)))))
+    }
+
+    def join_row_matrices(A: IndexedRowMatrix,
+                          B: IndexedRowMatrix) :
+            RDD[(Long, (linalg.Vector,linalg.Vector))] = {
+        val pair_A = A.rows.map(row => (row.index, row.vector))
+        val pair_B = B.rows.map(row => (row.index, row.vector))
+        return pair_A.join(pair_B)
+    }
+
+    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
+          case m: bDenseMatrix[Double] =>
+            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
+        case m: bSparseMatrix[Double] =>
+            return Matrices.sparse(m.rows, m.cols,
+                    m.colPtrs, m.rowIndices, m.data)
+    }
+
+    def random_local_matrix(rows: Int, cols: Int, den: Double) : Matrix = {
+        val rng = new Random()
+        return Matrices.rand(rows, cols, rng)
+    }
+
+    def norm(M: IndexedRowMatrix) : Double = {
+        val temp = M.rows.map(
+            row => bAlg.sum(bNum.pow(as_breeze(row.vector),2)))
+        val norm = sqrt(temp.sum)
+        return norm
+    }
+
+    def mean(A: Array[Double]) : Double = {
+        return A.sum / A.length
+    }
+
+    def variance(A: Array[Double]) : Double = {
+        val abar = mean(A)
+        val accum = A.map(e => pow(e-abar,2)).sum
+        return accum / (A.length - 1)
+    }
+}
+
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+ make.py ended: 2018-01-30 09:34:56
