@@ -28,7 +28,14 @@ If you don't want to use the provided AMI, you can create a fresh cluster using 
 2. `INSTALL_TENSORFLOW=1` - Set this environment variable to install TensorFlow. If this variable is unset then TensorFlow will not be installed.
 3. `COMPILE_SPARK=1` - Set this environment variable to download Spark and compile from Source. Spark will be compiled to support linking OpenBLAS. If this variable unset then we assume you will download and install your own version of Spark.
 
-After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum database. Before doing so, ensure that you have enabled passwordless SSH between the nodes in you cluster (including `localhost`!). The script will create a user `ubuntu` and a corresponding databas. Finally run `install-madlib.sh` to download and install MADLib. Greenplum will be installed with six segments. You will need to `gpexpand` Greenplum if you wish to use more segments or extend Greenplum to more nodes. 
+After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum database. Before doing so, ensure that you have enabled passwordless SSH between the nodes in you cluster (including `localhost`!). To enable passwordless SSH you can use the following lines. We do not do this by default because some cluster managers already configure passwordless SSH and we don't want to overwrite whatever they're doing.
+
+    printf '\n\n\n' | ssh-keygen -t rsa
+    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+    chmod 600 ~/.ssh/authorized_keys
+    sudo service ssh restart
+
+The script will create a user `ubuntu` and a corresponding databas. Finally run `install-madlib.sh` to download and install MADLib. Greenplum will be installed with six segments. You will need to `gpexpand` Greenplum if you wish to use more segments or extend Greenplum to more nodes. 
 
 All tests are designed to run on Ubuntu 16.04. The disk image used to create cluster nodes is available [here](http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img). An automated script for creating a cluster on top of OpenStack with all tools installed is available [here](https://github.com/thomas9t/spark-openstack). To prepare a single node cluster, simply run the script `/config/setup-nodes.sh`. The script will download and install dependencies.
 
