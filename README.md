@@ -35,7 +35,7 @@ After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum data
     chmod 600 ~/.ssh/authorized_keys
     sudo service ssh restart
 
-The script will create a user `ubuntu` and a corresponding databas. Finally run `install-madlib.sh` to download and install MADLib. Greenplum will be installed with six segments. You will need to `gpexpand` Greenplum if you wish to use more segments or extend Greenplum to more nodes. 
+The script will create a user `ubuntu` and a corresponding databas. Finally run `install-madlib.sh` to download and install MADLib. Greenplum will be installed with six segments. You will need to `gpexpand` Greenplum if you wish to use more segments or extend Greenplum to more nodes. You should also take care that system level configuration parameters are set as described in the technical report.
 
 All tests are designed to run on Ubuntu 16.04. The disk image used to create cluster nodes is available [here](http://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img). An automated script for creating a cluster on top of OpenStack with all tools installed is available [here](https://github.com/thomas9t/spark-openstack). To prepare a single node cluster, simply run the script `/config/setup-nodes.sh`. The script will download and install dependencies.
 
