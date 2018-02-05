@@ -41,7 +41,7 @@ import gen_data as data
 utils.safe_mkdir('../output/scale_mat_size')
 utils.safe_mkdir('../output/scale_nodes')
 
-parser = argparse.argument_parser()
+parser = argparse.ArgumentParser()
 parser.add_argument(
     '--test-type', type=str, default='scale_mat',
     help='Test to run - one of (scale_nodes, scale_mat) - default scale_mat')
