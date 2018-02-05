@@ -31,15 +31,13 @@ def main():
     url = 'http://{}'.format(stub)
 
     path = '../temp/day_1.gz'
-    if os.path.exists(path) or os.path.exists(path.replace('.gz','')):
-        print 'Data already exists. No work performed.'
-        return
+    if not (os.path.exists(path) or os.path.exists(path.replace('.gz',''))):
+        rc = os.system('wget {} -O {}'.format(url, path))
+        if rc != 0:
+            raise StandardError('Could not fetch data')
 
-    rc = os.system('wget {} -O {}'.format(url, path))
-    if rc != 0:
-        raise StandardError('Could not fetch data')
-
-    rc = utils.hdfs_put(path)
+    os.system('hdfs dfs -mkdir /scratch')
+    rc = hdfs_put(path)
 
 if __name__ == '__main__':
     main()

@@ -2,7 +2,7 @@
 
 The Scalable Linear Algebra Benchmark
 
-# NOTE: This repo is currently being populated. Some referenced contents may not be present and will be uploaded within the next couple days.
+### If you find a bug please open an issue!
 
 ## Instructions
 
@@ -12,13 +12,7 @@ All directories follow an identical configuration. Each directory consists of tw
 
 ### (1) Configure Cluster Node(s)
 
-#### Using the AWS AMI
-
-System setup is a laborious and not very fun process. We have released an AWS AMI based on Ubuntu 16.04 with all dependencies pre-installed. Unless you have a strong reason not to - you are advised to use this AMI. The AMI is available [here](http://souchong.ucsd.edu/slab_ami.ami). You can use this AMI to run tests in the singlenode setting or create your own cluster. A couple relevant pieces of information.
-
-#### Building From Source
-
-If you don't want to use the provided AMI, you can create a fresh cluster using the compilation scripts provided in `/config`. Be aware that the provided scripts will install some packages from 3rd party Ubuntu repos. These are all legit (e.g. Rstudio and SBT) but if you're suspicious of such things you may want to comment out these lines and install on your own. First run `setup-nodes.sh`. This script will install software and perform basic system configuration. The script takes the following parameters in the form of environment variables
+You can create a fresh cluster using the compilation scripts provided in `/config`. Be aware that the provided scripts will install some packages from 3rd party Ubuntu repos. These are all legit (e.g. Rstudio and SBT) but if you're suspicious of such things you may want to comment out these lines and install on your own. First run `setup-nodes.sh`. This script will install software and perform basic system configuration. The script takes the following parameters in the form of environment variables
 
 1. `COMPILE_OPENBLAS=1` - Set this environment variable to compile OpenBLAS from source. If this variable is unset then OpenBLAS will be installed from `apt-get`
 2. `INSTALL_TENSORFLOW=1` - Set this environment variable to install TensorFlow. If this variable is unset then TensorFlow will not be installed.
@@ -45,13 +39,15 @@ For the intrepid used who wishes to go it alone setting up the testing environme
 5. R has been installed along with the pbdDMAT package (and its dependencies) and OpenMPI
 6. OpenBLAS has been installed (either through apt-get or from sources) and can be loaded by R.
 7. Scala and SBT are installed
-8. System Parameters have been configured as described in 
+8. System Parameters have been configured as described in the technical report
+9. Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named **mycluster-slave-<i>** you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`.
 
 ### (2) Additional System Configuration
 
-Some additional manual  configuration steps are necessary to replicate our testing environment.
+Some additional manual configuration steps are necessary to replicate our testing environment.
 
-1. You will need to configure Spark and Haddop to run on your cluster. The AMI has them set up to run in single node mode. There are many online tutorials explaining how to do this. Our configuration directories are available under the `/config` folder of this repo. You can tweak them to suit the resources available on your system.
+1. Install `pbdDMAT` - Open R (type `R` on the command line) and run `install.packages('pbmDMAT')`
+1. You will need to configure Spark and Hadoop to run on your cluster. Our configuration directories are available under the `/config` folder of this repo. You can tweak them to suit the resources available on your system and your hostnames/IPs etc... Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named **mycluster-slave-<i>** you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`. 
 2. We have built Greenplum using six segments. If using in the single node setting you will likely want to increase this to 16-24 (we use 24) depending on the number of cores on your machine. To do so you can use the `gpexpand` command line utility. This utility can be used to expand Greenplum to new nodes as well. Consult the documentation available [here](http://gpdb.docs.pivotal.io/520/utility_guide/admin_utilities/gpexpand.html).
 3. If you wish to see the specific configuration settings we used for Spark and Hadoop (hdfs), the configuration directories we used are available as zip files in the `/config/` subfolder of this repository.
 4. You may need to modify some system level parameters in `/etc/security/limits.conf` and `/etc/sysctl.conf` to ensure your system is properly configured. We have provided our versions of these files in the `/config` directory of this repo. You can modify them based on the resources available to you.
