@@ -70,7 +70,8 @@ for sr in sparsity:
         '../output/M{}{}_sparse_wide.mtx'.format(*fmt))
     data.gen_data_sparse(k, 100, sr, 'M{}{}_sparse_tall'.format(*fmt), mpath_tall)
     data.gen_data_sparse(100, k, sr, 'M{}{}_sparse_wide'.format(*fmt), mpath_wide)
-
+    data.gen_data_disk('../output/y{}_sparse.csv'.format(sparse_gb),
+                       k, 1, k, True)
     stmt = """
         CREATE VIEW N{0}{1}_sparse_tall AS (
             SELECT * FROM M{0}{1}_sparse_tall
@@ -81,6 +82,9 @@ for sr in sparsity:
 
     utils.link_if_not('../output/M{}{}_sparse_tall.mtx'.format(*fmt),
                       '../output/N{}{}_sparse_tall.mtx'.format(*fmt))
+
+cxn.load_dense_matrix('../output/y{}_sparse.csv'.format(sparse_gb),
+                      'y{}_sparse'.format(sparse_gb))
 
 paths = os.listdir('../output')
 paths = filter(
@@ -94,7 +98,7 @@ fh = open('manifest.txt', 'a')
 
 for path in paths:
     dest, ext = path.replace('../output/','').split('.')
-    print dest
+    
     data.write_sparse_meta(dest, path, cxn)
     if path in manifest:
         continue
