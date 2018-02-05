@@ -50,7 +50,7 @@ utils.run_spark(program='SparkPreclean',
                cmd_args='_1 true')
 utils.run_python(program='postprocess.py',
                 cmd_args='--sparse False --stub _1')
-utils.run_python(program='build_tables.py')
+utils.run_python(program='build_tables.py', cmd_args='_1')
 
 # stop logging
 end_make_logging()

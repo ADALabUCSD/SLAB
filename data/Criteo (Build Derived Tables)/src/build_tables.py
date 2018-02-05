@@ -23,6 +23,7 @@ import make_utils as utils
 from sql_cxn import SQLCxn
 
 def main():
+    stub = sys.argv[1]
     cxn = SQLCxn(timeout=None, username='ubuntu', db='ubuntu')
 
     if not cxn.table_exists('adclick_clean_vectors_split'):
