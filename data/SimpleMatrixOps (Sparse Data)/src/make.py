@@ -93,10 +93,12 @@ with open('manifest.txt') as fh:
 fh = open('manifest.txt', 'a')
 
 for path in paths:
+    dest, ext = path.replace('../output/','').split('.')
+    print dest
+    data.write_sparse_meta(dest, path, cxn)
     if path in manifest:
         continue
     utils.hdfs_put(path)
-    dest, ext = path.replace('../output/','').split('.')
     fh.write(path + '\n')
     fh.flush()
 
