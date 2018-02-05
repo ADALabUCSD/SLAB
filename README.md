@@ -52,6 +52,7 @@ For the intrepid used who wishes to go it alone setting up the testing environme
 
 Some additional manual configuration steps are necessary to replicate our testing environment.
 
+1. Install `pbdDMAT` - Open R (type `R` on the command line) and run `install.packages('pbmDMAT')`
 1. You will need to configure Spark and Hadoop to run on your cluster. Our configuration directories are available under the `/config` folder of this repo. You can tweak them to suit the resources available on your system and your hostnames/IPs etc... Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named **mycluster-slave-<i>** you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`. 
 2. We have built Greenplum using six segments. If using in the single node setting you will likely want to increase this to 16-24 (we use 24) depending on the number of cores on your machine. To do so you can use the `gpexpand` command line utility. This utility can be used to expand Greenplum to new nodes as well. Consult the documentation available [here](http://gpdb.docs.pivotal.io/520/utility_guide/admin_utilities/gpexpand.html).
 3. If you wish to see the specific configuration settings we used for Spark and Hadoop (hdfs), the configuration directories we used are available as zip files in the `/config/` subfolder of this repository.
