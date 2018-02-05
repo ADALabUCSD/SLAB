@@ -1,7 +1,9 @@
 cd ~/gpdb/build
 
+set -e
 echo "export MASTER_DATA_DIRECTORY=/data/master/gpseg-1" >> ~/.bashrc
-createdb ubuntu
+source /usr/local/gpdb/greenplum_path.sh
+#createdb ubuntu
 wget 'https://archive.apache.org/dist/madlib/1.12/apache-madlib-1.12-src.tar.gz' -O madlib.tar.gz
 sudo apt-get -y install gcc-4.9 g++-4.9
 export CC=/usr/bin/gcc-4.9
@@ -26,4 +28,5 @@ sudo make
 cd ~/gpdb/build/apache-madlib-1.12-src/build
 echo "source /usr/local/gpdb/greenplum_path.sh" >> ~/.bashrc
 source ~/.bashrc
+source /usr/local/gpdb/greenplum_path.sh
 ./src/bin/madpack -p greenplum -s madlib install

@@ -200,7 +200,6 @@ sudo chown -R $me:$me /data2
 sudo ldconfig
 
 cd ~/
-git clone https://github.com/ADALabUCSD/SLAB.git
 echo "export BENCHMARK_PROJECT_ROOT=/home/ubuntu/SLAB" >> ~/.bashrc
 echo "COMPLETE" > ~/SETUP_COMPLETE
 
@@ -213,6 +212,7 @@ if [ "${COMPILE_SPARK}" != "" ]; then
     export me=`whoami`
     sudo chown -R ${me}:${me} /usr/local/spark
     echo "export PATH=${PATH}:/usr/local/spark/bin" >> ~/.bashrc
+    source ~/.bashrc
 
     # same for Hadoop
     wget http://slab:eigen@souchong.ucsd.edu/hadoop.tar.gz
@@ -224,6 +224,5 @@ if [ "${COMPILE_SPARK}" != "" ]; then
 
     sudo mkdir /mnt/hdfs
     sudo chown ${me}:${me} /mnt/hdfs
-    echo "127.0.0.1 `hostname`" | sudo tee -a /etc/hosts
     hdfs namenode format
 fi
