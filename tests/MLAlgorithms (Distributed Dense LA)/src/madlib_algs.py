@@ -35,7 +35,7 @@ def main(kwargs):
 
     print 'Evaluating: {}'.format(opType)
 
-    cxn = SQLCxn(username='ubuntu', db='ubuntu', port=9875, timeout=10000)
+    cxn = SQLCxn(username='ubuntu', db='ubuntu', timeout=10000)
 
     colnames = ['nodes','rows','cols','time1','time2','time3','time4','time5']
     runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
