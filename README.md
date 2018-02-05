@@ -14,7 +14,7 @@ All directories follow an identical configuration. Each directory consists of tw
 
 #### Using the AWS AMI
 
-System setup is a laborious and not very fun process. We have released an AWS AMI based on Ubuntu 16.04 with all dependencies pre-installed. Unless you have a strong reason not to - you are advised to use this AMI. The AMI is available [here](http://souchong.ucsd.edu/slab_ami.ami). You can use this AMI to run tests in the singlenode setting or create your own cluster. A couple relevant pieces of information.
+System setup is a laborious and not very fun process. We have released an AWS AMI based on Ubuntu 16.04 with all dependencies pre-installed. Unless you have a strong reason not to - you are advised to use this AMI. The AMI is available [here](http://souchong.ucsd.edu/slab_ami.ami). You can use this AMI to run tests in the singlenode setting or create your own cluster.
 
 #### Building From Source
 
