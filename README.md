@@ -2,7 +2,7 @@
 
 The Scalable Linear Algebra Benchmark
 
-# NOTE: This repo is currently being populated. Some referenced contents may not be present and will be uploaded within the next couple days.
+### If you find a bug please open an issue!
 
 ## Instructions
 
