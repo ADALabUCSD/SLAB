@@ -224,5 +224,5 @@ if [ "${COMPILE_SPARK}" != "" ]; then
 
     sudo mkdir /mnt/hdfs
     sudo chown ${me}:${me} /mnt/hdfs
-    hdfs namenode format
+    /usr/local/hadoop/bin/hdfs namenode format
 fi

@@ -12,13 +12,20 @@ All directories follow an identical configuration. Each directory consists of tw
 
 ### (1) Configure Cluster Node(s)
 
+The repo linked [here](https://github.com/thomas9t/spark-openstack.git) can be used to automatically set up a cluster using OpenStack. Unless you have a good reason not to, you are advised to use this automated script.
+
 You can create a fresh cluster using the compilation scripts provided in `/config`. Be aware that the provided scripts will install some packages from 3rd party Ubuntu repos. These are all legit (e.g. Rstudio and SBT) but if you're suspicious of such things you may want to comment out these lines and install on your own. First run `setup-nodes.sh`. This script will install software and perform basic system configuration. The script takes the following parameters in the form of environment variables
 
 1. `COMPILE_OPENBLAS=1` - Set this environment variable to compile OpenBLAS from source. If this variable is unset then OpenBLAS will be installed from `apt-get`
 2. `INSTALL_TENSORFLOW=1` - Set this environment variable to install TensorFlow. If this variable is unset then TensorFlow will not be installed.
 3. `COMPILE_SPARK=1` - Set this environment variable to download Spark and compile from Source. Spark will be compiled to support linking OpenBLAS. If this variable unset then we assume you will download and install your own version of Spark.
 
-After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum database. Before doing so, ensure that you have enabled passwordless SSH between the nodes in you cluster (including `localhost`!). To enable passwordless SSH you can use the following lines. We do not do this by default because some cluster managers already configure passwordless SSH and we don't want to overwrite whatever they're doing.
+After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum database. Before doing so, ensure that you have enabled passwordless SSH between the nodes in you cluster (including `localhost`!) and create a database and user "ubuntu" in Greenplum. The create an "ubuntu" user, run the following lines:
+
+    source /usr/local/gpdb/greenplum_path.sh
+    createdb ubuntu
+
+To enable passwordless SSH you can use the following lines. We do not do this by default because some cluster managers already configure passwordless SSH and we don't want to overwrite whatever they're doing.
 
     printf '\n\n\n' | ssh-keygen -t rsa
     cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
@@ -40,14 +47,14 @@ For the intrepid used who wishes to go it alone setting up the testing environme
 6. OpenBLAS has been installed (either through apt-get or from sources) and can be loaded by R.
 7. Scala and SBT are installed
 8. System Parameters have been configured as described in the technical report
-9. Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named **mycluster-slave-<i>** you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`.
+9. Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named `mycluster-slave-${i}` you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`.
 
 ### (2) Additional System Configuration
 
 Some additional manual configuration steps are necessary to replicate our testing environment.
 
 1. Install `pbdDMAT` - Open R (type `R` on the command line) and run `install.packages('pbmDMAT')`
-1. You will need to configure Spark and Hadoop to run on your cluster. Our configuration directories are available under the `/config` folder of this repo. You can tweak them to suit the resources available on your system and your hostnames/IPs etc... Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named **mycluster-slave-<i>** you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`. 
+1. You will need to configure Spark and Hadoop to run on your cluster. Our configuration directories are available under the `/config` folder of this repo. You can tweak them to suit the resources available on your system and your hostnames/IPs etc... Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named `mycluster-slave-${i}` you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`. 
 2. We have built Greenplum using six segments. If using in the single node setting you will likely want to increase this to 16-24 (we use 24) depending on the number of cores on your machine. To do so you can use the `gpexpand` command line utility. This utility can be used to expand Greenplum to new nodes as well. Consult the documentation available [here](http://gpdb.docs.pivotal.io/520/utility_guide/admin_utilities/gpexpand.html).
 3. If you wish to see the specific configuration settings we used for Spark and Hadoop (hdfs), the configuration directories we used are available as zip files in the `/config/` subfolder of this repository.
 4. You may need to modify some system level parameters in `/etc/security/limits.conf` and `/etc/sysctl.conf` to ensure your system is properly configured. We have provided our versions of these files in the `/config` directory of this repo. You can modify them based on the resources available to you.
