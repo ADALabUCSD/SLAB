@@ -71,6 +71,9 @@ def main(kwargs):
         """.format(X=x_table_name, y=y_table_name)
         cxn.execute(preproc)
         call = 'do_robust(x_table_name, cxn)'
+    elif opType == 'pca':
+        print 'Not Implemented'
+        return
 
     rows = shape[0]
     cols = shape[1]
