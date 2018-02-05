@@ -49,7 +49,7 @@ op_types = 'TRANS MVM NORM TSM ADD GMM'
 parser.add_argument('--operators', type=str, default=op_types,
     help='Space delimited list of operators to test. Default: "{}"'.format(op_types))
 systems = 'R SYSTEMML MLLIB MADLIB'
-parser.add_argument('--systems', type=str, default=sysems,
+parser.add_argument('--systems', type=str, default=systems,
     help='Space delimited lust of systems to compare. Default: "{}"'.format(systems))
 
 args = parser.parse_args()
