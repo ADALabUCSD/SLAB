@@ -47,7 +47,7 @@ For the intrepid used who wishes to go it alone setting up the testing environme
 6. OpenBLAS has been installed (either through apt-get or from sources) and can be loaded by R.
 7. Scala and SBT are installed
 8. System Parameters have been configured as described in the technical report
-9. Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named **mycluster-slave-<i>** you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`.
+9. Our configuration files for Spark and Hadoop **assume the hostname is mycluster-master** and workers are named **mycluster-slave**-<i> you may need to modify Spark's `slaves`, `spark-defaults.conf` and `spark-env.sh` to suit the hostname of your cluster master. You will additionally need to modify Hadoop's `masters`, `slaves` and `core-site.xml`.
 
 ### (2) Additional System Configuration
 
