@@ -18,7 +18,12 @@ You can create a fresh cluster using the compilation scripts provided in `/confi
 2. `INSTALL_TENSORFLOW=1` - Set this environment variable to install TensorFlow. If this variable is unset then TensorFlow will not be installed.
 3. `COMPILE_SPARK=1` - Set this environment variable to download Spark and compile from Source. Spark will be compiled to support linking OpenBLAS. If this variable unset then we assume you will download and install your own version of Spark.
 
-After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum database. Before doing so, ensure that you have enabled passwordless SSH between the nodes in you cluster (including `localhost`!). To enable passwordless SSH you can use the following lines. We do not do this by default because some cluster managers already configure passwordless SSH and we don't want to overwrite whatever they're doing.
+After running `setup-nodes.sh` run `install-gpdb.sh` to build the Greenplum database. Before doing so, ensure that you have enabled passwordless SSH between the nodes in you cluster (including `localhost`!) and create a database and user "ubuntu" in Greenplum. The create an "ubuntu" user, run the following lines:
+
+    source /usr/local/gpdb/greenplum_path.sh
+    createdb ubuntu
+
+To enable passwordless SSH you can use the following lines. We do not do this by default because some cluster managers already configure passwordless SSH and we don't want to overwrite whatever they're doing.
 
     printf '\n\n\n' | ssh-keygen -t rsa
     cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
