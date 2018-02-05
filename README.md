@@ -12,6 +12,8 @@ All directories follow an identical configuration. Each directory consists of tw
 
 ### (1) Configure Cluster Node(s)
 
+The repo linked [here](https://github.com/thomas9t/spark-openstack.git) can be used to automatically set up a cluster using OpenStack. Unless you have a good reason not to, you are advised to use this automated script.
+
 You can create a fresh cluster using the compilation scripts provided in `/config`. Be aware that the provided scripts will install some packages from 3rd party Ubuntu repos. These are all legit (e.g. Rstudio and SBT) but if you're suspicious of such things you may want to comment out these lines and install on your own. First run `setup-nodes.sh`. This script will install software and perform basic system configuration. The script takes the following parameters in the form of environment variables
 
 1. `COMPILE_OPENBLAS=1` - Set this environment variable to compile OpenBLAS from source. If this variable is unset then OpenBLAS will be installed from `apt-get`
