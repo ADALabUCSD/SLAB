@@ -48,7 +48,7 @@ def doMatrixOp(kwargs):
     runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
     runTimes.columns = colnames
 
-    cxn = SQLCxn(username='ubuntu', db='ubuntu', port=9875, timeout=10000)
+    cxn = SQLCxn(username='ubuntu', db='ubuntu', timeout=10000)
     shape = cxn.get_shape_dense('M{}'.format(tableStub))
 
     cleanup = []
