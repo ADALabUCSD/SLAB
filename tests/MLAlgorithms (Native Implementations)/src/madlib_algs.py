@@ -34,7 +34,7 @@ def main(kwargs):
     runTimes.columns = colnames
 
     cxn = SQLCxn(username='ubuntu', db='ubuntu')
-    #shape = cxn.get_shape_dense('adclick_clean{}_dense'.format(stub))
+    shape = cxn.get_shape_dense('adclick_clean{}_dense'.format(stub))
     if not cxn.table_exists('adclick_clean_vectors_split'):
         stmt = """
             CREATE TABLE adclick_clean_vectors_split AS (
@@ -44,7 +44,6 @@ def main(kwargs):
         """.format(shape[1], stub)
         cxn.execute(stmt)
 
-    shape = (199563535,10)    
     # need to do a bit of preprocessing
     if op_type == 'logit':
         cxn.execute('DROP TABLE IF EXISTS adclick_logit_summary')
@@ -83,9 +82,10 @@ def main(kwargs):
                                     'result_table',
                                     'row_num',
                                     5);
-            SELECT madlib.pca_project('adlick_clean_depvars',
+            SELECT madlib.pca_project('adclick_clean_depvars',
                                       'result_table',
                                       'adclick_prj',
+                                      'row_num',
                                       'residual_table',
                                       'result_summary_table')
         """

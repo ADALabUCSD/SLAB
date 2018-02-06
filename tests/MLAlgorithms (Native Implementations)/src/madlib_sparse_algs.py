@@ -36,6 +36,19 @@ def main(kwargs):
     cxn = SQLCxn(username='ubuntu', db='ubuntu', timeout=10000)
 
     shape = cxn.get_shape('adclick_clean_1_sparse')
+    if not cxn.table_exists('adclick_clean_1_vectors_sparse'):
+        stmt = """
+        CREATE TABLE adclick_clean_1_vectors_sparse AS (
+            SELECT x.row_num, madlib.svec_cast_positions_float8arr(
+               ARRAY_AGG(x.col_num), ARRAY_AGG(x.val), {}, 0.0
+               ) AS indep_vars, y.val AS y
+             FROM adclick_clean_1_sparse x
+            INNER JOIN adclick_clean_y y ON x.row_num = y.row_num
+            GROUP BY x.row_num, y.val
+        ) DISTRIBUTED BY (row_num)
+        """.format(shape[1])        
+        cxn.execute(stmt)
+
     if op_type == 'logit':
         cxn.execute('DROP TABLE IF EXISTS adclick_logit_summary')
         cxn.execute('DROP TABLE IF EXISTS adclick_logit')
@@ -69,7 +82,7 @@ def main(kwargs):
                                            '{0}',
                                            '{1}',
                                            5);
-            SELECT madlib.pca_project('adclick_clean_1_sparse',
+            SELECT madlib.pca_sparse_project('adclick_clean_1_sparse',
                                       'result_table',
                                       'adclick_prj',
                                       'row_num',
