@@ -62,22 +62,11 @@ def main(kwargs):
         cleanup = ("map(lambda x: cxn.execute("
                    "'DROP TABLE {}'.format(x)), ['XTX','XTY','XTX_INV','B'])")
     elif opType == 'robust':
-        # To save time we can just compute squared residuals once...
-        # Although this is obviously not correct the dimensions are always the
-        # same and so this will save us the time of generating them for each
-        # test case. 
-        if not cxn.table_exists('R2'):
-            do_reg(x_table_name, y_table_name, cxn)
-            preproc = """
-                SELECT madlib.matrix_mult('{X}',NULL,'B',NULL,'Y_HAT');
-                CREATE TABLE R2 AS (
-                    SELECT {y}.row_num, 1 as col_num, 
-                        POW({y}.val[1]-y_hat.val[1],2) val
-                      FROM {y}
-                     INNER JOIN y_hat ON {y}.row_num = y_hat.row_num
-                ) DISTRIBUTED BY (row_num)
-            """.format(X=x_table_name, y=y_table_name)
-            cxn.execute(preproc)
+        cxn.execute('DROP TABLE IF EXISTS R2 CASCADE')
+        cxn.execute(
+            "SELECT MADLIB.matrix_random({},1,NULL,'uniform','R2',NULL)".format(
+             shape[0]))
+        cxn.execute('ALTER TABLE R2 RENAME COLUMN ROW TO ROW_NUM')
         call = 'do_robust(x_table_name, cxn)'
 
     rows = shape[0]
@@ -244,7 +233,7 @@ def do_robust(x_table_name, cxn):
     make_xtrans_sparse(x_table_name, cxn)
     stmt = """
         CREATE VIEW R2_diag AS (
-            SELECT row_num, row_num AS col_num, val
+            SELECT row_num, row_num AS col_num, val[1] AS val
               FROM R2
         );
         SELECT madlib.matrix_mult('{0}_trans',NULL,'{0}',NULL,'XTX');

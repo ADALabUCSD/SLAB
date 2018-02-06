@@ -54,5 +54,6 @@ for alg in algorithms:
                         driver_memory='20G',
                         cmd_args=cmd_args_hdfs)
     if 'MADLIB' in systems:
-        utils.run_python(program='madlib_bigmat_algs.py', 
-                         cmd_args=cmd_args_madlib)
+        print 'MADLib Tests Not Implemented for Sparse Criteo'
+    #    utils.run_python(program='madlib_bigmat_algs.py', 
+    #                     cmd_args=cmd_args_madlib)
