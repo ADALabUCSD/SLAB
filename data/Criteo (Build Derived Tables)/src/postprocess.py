@@ -56,8 +56,15 @@ def process_madlib(stub, sparse_flag, cxn):
     if sparse_flag:
         cxn.load_sparse_matrix(
             '../output/adclick_clean{}_sparse.mtx'.format(stub),
-            'adclick_clean{}_sparse'.format(stub))
-
+            'adclick_clean{}_sparse_'.format(stub))
+        stmt = """
+           CREATE TABLE adclick_clean{}_sparse AS (
+               SELECT row_num+1 AS row_num, col_num+1 AS col_num, val
+                 FROM adclick_clean{}_sparse_
+           ) DISTRIBUTED BY (row_num, col_num)
+        """.format(stub)
+        cxn.execute(stmt)
+        cxn.execute('DROP TABLE adclick_clean{}_sparse_')
 
 if __name__ == '__main__':
     argv = parser.parse_args()
