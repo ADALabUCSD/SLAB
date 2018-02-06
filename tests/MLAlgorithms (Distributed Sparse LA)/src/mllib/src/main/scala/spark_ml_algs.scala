@@ -197,7 +197,7 @@ object SparkMLAlgorithms {
         var step_size = 0.001
         val N = X.numRows.toInt
         val K = X.numCols.toInt
-        var w = random_matrix(K, 1, X.rowsPerBlock, X.colsPerBlock, sc)
+        var w = random_matrix(K, 1, y.rowsPerBlock, y.colsPerBlock, sc)
         val XT = X.transpose
         XT.persist(MEMORY_AND_DISK_SER)
 
@@ -209,7 +209,7 @@ object SparkMLAlgorithms {
                         (x,y), from_breeze(
                     bNum.sigmoid( to_dense( as_breeze( mat ) ) ) )
                 )
-            }), X.rowsPerBlock, X.colsPerBlock)
+            }), y.rowsPerBlock, y.colsPerBlock)
             val eps = gg.subtract( y )
             val w_update = scalar_multiply((step_size/N.toDouble),
                 XT.multiply( eps, 500 ) ) 

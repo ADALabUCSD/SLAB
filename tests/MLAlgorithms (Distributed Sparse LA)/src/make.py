@@ -45,8 +45,11 @@ parser.add_argument('--test-type', type=str, default='scale',
     help='Test type to run. May be "criteo" or "scale". Default "scale"')
 sparsity = '0001 001 01 1'
 parser.add_argument(
-    '--msize', type=str, default=sparsity,
+    '--sparsity', type=str, default=sparsity,
     help='Space delimited list of matrix sparsitites to test for "scale" tests')
+parser.add_argument(
+    '--sparse-gb', type=str, default='100',
+    help='Number of GB in logical sparse matrix. Must agree with value used for data generation')
 parser.add_argument('--stub', default='_1', type=str,
     help='Unneeded. For debug purposes only')
 algorithms = 'reg logit gnmf robust'
@@ -80,7 +83,7 @@ if args.test_type == 'scale':
                                                                args.algorithms,
                                                                args.systems,
                                                                args.sparsity,
-                                                               100))
+                                                               args.sparse_gb))
 
 remove_dir('scratch_space')
 

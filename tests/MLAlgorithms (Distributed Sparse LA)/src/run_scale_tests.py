@@ -22,22 +22,23 @@ nodes = sys.argv[2]
 algorithms = sys.argv[3].split(' ')
 systems = sys.argv[4].split(' ')
 sparsity = sys.argv[5].split(' ')
-ncols = sys.argv[6].split(' ')
+sparse_gb = sys.argv[6]
 
+ncols=[100]
 args_madlib = ('mattype=tall '
-               'xTableName=M_{sr}{ncol}_sparse_tall '
-               'yTableName=y100_sparse '
+               'xTableName=M_{sr}{sparse_gb}_sparse_tall '
+               'yTableName=y{sparse_gb}_sparse '
                'nodes={nodes} opType={op} ncol={ncol} sr={sr}')
 args_hdfs = ('mattype=tall '
-             'Xpath=/scratch/M_{sr}{ncol}_sparse_tall.mtx '
-             'Ypath=/scratch/y100_sparse.csv '
+             'Xpath=/scratch/M_{sr}{sparse_gb}_sparse_tall.mtx '
+             'Ypath=/scratch/y{sparse_gb}_sparse.csv '
              'passPath=/scratch/pass.csv '
-             'nodes={nodes} opType={op} ncol={ncol} sr={sr}')
+             'nodes={nodes} opType={op} ncol={sparse_gb} sr={sr}')
 
 for sr in sparsity:
     for alg in algorithms:
         for nc in ncols:
-            argv = {'nodes': nodes, 'op': alg, 'sr': sr, 'ncol': nc}
+            argv = {'nodes': nodes, 'op': alg, 'sr': sr, 'sparse_gb': sparse_gb, 'ncol': nc}
             cmd_args_hdfs = args_hdfs.format(**argv)
             cmd_args_madlib = args_madlib.format(**argv)
 
