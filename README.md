@@ -82,13 +82,14 @@ Running tests is very straightforward! Just `cd` to the appropriate directory an
 
 1. `systems` - A space delimited list of systems to compare. In the distributed setting may be any of `"MADLIB SYSTEMML MLLIB R"`. In the single node setting may be any of `"MADLIB SYSTEMML MLLIB R TF NUMPY"`.
 2. `operators` - For `SimpleMatrixOps` tests a space delimited list of operators to evaluate. May be any of `TRANS MVM NORM TSM GMM ADD`.
+3. `msize` - The size of matrix on which to perform tests. **Must conform with the data geenrated in (4)**. That is, passing `--msize 4` means that you should generate data with `--msize 4`. 
 4. `test-type` - Which type of test to run. Several directories can run multiple tests. Consult the output of `python make.py -h` for the options available for each directory.
 3. `algorithms` - For `MLAlgorithms` tests a space delimited list of algorithms to run. For LA based tests may be any of `robust gnmf reg logit`. For native implementation tests may be any of `reg logit pca`.
 4. `nodes` - For distributed tests the number of nodes on which the test is being run. E.g. if you're running the test on a two node cluster this would be 2.
 
 ## Examples:
 
-The following example details how to build data and run tests to compare system performance for dense primitive matrix operators and dense LA based ML algorithms on matrices which will be approximately 8 and 32 GB on disk as CSV files.
+The following example details how to build data and run tests to compare system performance for dense primitive matrix operators and dense LA based ML algorithms on matrices which will be approximately 8 and 30 GB on disk as CSV files.
 
     cd "${BENCHMARK_PROJECT_ROOT}/data/SimpleMatrixOps (Disk Data)/src"
     python make.py --msize "4 16"
