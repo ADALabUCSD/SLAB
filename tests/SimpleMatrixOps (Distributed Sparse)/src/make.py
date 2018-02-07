@@ -48,12 +48,15 @@ parser.add_argument('--nodes', type=str,
     help='Number of nodes on which test is being run (e.g. 2)')
 parser.add_argument('--sparsity', type=str, default='0001 001 01 1',
     help='Space delimited list of matrix densities on which to perform tests. Default: "0001 001 01 1"')
+parser.add_argument('--sparse-gb', type=str, default='100',
+    help='Logical size of sparse matrix. Must agree with value selected during data generation. Default: 100')
 op_types = 'TRANS MVM NORM TSM ADD GMM'
 parser.add_argument('--operators', type=str, default=op_types,
     help='Space delimited list of operators to test. Default: "{}"'.format(op_types))
 systems = 'R SYSTEMML MLLIB MADLIB'
-parser.add_argument('--systems', type=str, default=sysems,
-    help='Space delimited lust of systems to compare. Default: "{}"'.format(systems))
+parser.add_argument('--systems', type=str, default=systems,
+    help='Space delimited list of systems to compare. Default: "{}"'.format(systems))
+args = parser.parse_args()
 
 # start logging
 start_make_logging()
@@ -63,6 +66,7 @@ nodes = args.nodes
 sparsity = args.sparsity
 systems = args.systems
 op_types = args.operators
+sparse_gb = args.sparse_gb
 
 # compile
 makelog = '../../output/make.log'
@@ -71,10 +75,12 @@ utils.run_sbt('./mllib',  makelog = makelog)
 
 if test_type == 'scale_nodes':
     utils.run_python(program='node_scaling_tests.py',
-                     cmd_args='{} "{}" "{}" "{}"'.format(nodes, sparsity, systems, op_types))
+                     cmd_args='{} "{}" "{}" "{}" {}'.format(
+        nodes, sparsity, systems, op_types, sparse_gb))
 elif test_type == 'scale_mat':
     utils.run_python(program='msize_scaling_tests.py',
-                     cmd_args='{} "{}" "{}" "{}"'.format(nodes, sparsity, systems, op_types))
+                     cmd_args='{} "{}" "{}" "{}" {}'.format(
+        nodes, sparsity, systems, op_types, sparse_gb))
 else:
     raise StandardError('TEST_TYPE must be one of: "scale_nodes", "scale_mat"')
 

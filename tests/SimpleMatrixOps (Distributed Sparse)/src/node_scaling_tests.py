@@ -21,6 +21,7 @@ nodes = sys.argv[1]
 sparsity = sys.argv[2].split(' ')
 systems = sys.argv[3].split(' ')
 op_types = sys.argv[4].split(' ')
+sparse_gb = sys.argv[5]
 
 cmd_args = ('opType={opType} mattype={mattype}'
             ' Mpath={Mpath} Npath={Npath}'
@@ -32,7 +33,7 @@ cmd_args = ('opType={opType} mattype={mattype}'
 data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
 utils.hdfs_put('../temp/pass.csv')
 
-gb = 100
+gb = sparse_gb
 for op in op_types:
     for sr in sparsity:
         mattype_m = 'tall' if op != 'GMM' else 'wide'
