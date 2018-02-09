@@ -38,11 +38,11 @@ import global_params as params
 
 parser = argparse.ArgumentParser()
 systems = 'TF MADLIB SYSTEMML MLLIB R NUMPY'
-parser.add_argument('--systems', type=str, default='', 
+parser.add_argument('--systems', type=str, default=systems, 
     help='Space delimited list of systems to run. Default: ({})'.format(systems))
 algorithms = 'logit reg gnmf robust'
-parser.add_argument('--algorithms', type=str, default='', 
-    help='Space delimited list of algorithms to run. Default: ({})'.format(systems))
+parser.add_argument('--algorithms', type=str, default=algorithms, 
+    help='Space delimited list of algorithms to run. Default: ({})'.format(algorithms))
 parser.add_argument('--nrows', type=str, default='10000000',
     help='Number of rows to generate in test matrices. Default: 10000')
 args = parser.parse_args()
