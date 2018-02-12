@@ -244,7 +244,7 @@ def do_pca(x_table_name, k, cxn):
     cxn.execute(stmt)
 
 def start_gpdb(port, nproc):
-    if port is None:
+    if (port is None) or (nproc == '24'):
         os.system('yes | gpstart')
         cxn = SQLCxn(username='ubuntu', db='ubuntu', timeout=10000)
     else:
@@ -255,7 +255,7 @@ def start_gpdb(port, nproc):
 
 def stop_gpdb(nproc, cxn):
     cxn._cxn.close()
-    if nproc is None:
+    if (nproc is None) or (nproc == '24'):
         os.system('yes | gpstop')
     else:
         call = 'yes | gpstop -d /gpsegs/gpdb-{}/master/gpseg-1'.format(nproc)
