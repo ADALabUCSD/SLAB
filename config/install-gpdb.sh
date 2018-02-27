@@ -9,8 +9,8 @@ cp $GPHOME/docs/cli_help/gpconfigs/gpinitsystem_config \
 cd gpconfigs
 sudo ldconfig
 
-export me=localhost
-sed -i s/MASTER_HOSTNAME=mdw/MASTER_HOSTNAME=localhost/g gpinitsystem_config
+export me=`hostname`
+sed -i s/MASTER_HOSTNAME=mdw/MASTER_HOSTNAME=${me}/g gpinitsystem_config
 echo "localhost" >> hostfile_gpinitsystem
 
 cd ../
