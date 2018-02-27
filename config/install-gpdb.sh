@@ -11,7 +11,7 @@ sudo ldconfig
 
 export me=`hostname`
 sed -i s/MASTER_HOSTNAME=mdw/MASTER_HOSTNAME=${me}/g gpinitsystem_config
-echo "localhost" >> hostfile_gpinitsystem
+echo "${me}" >> hostfile_gpinitsystem
 
 cd ../
 yes | gpinitsystem -c gpconfigs/gpinitsystem_config -h \
