@@ -1,14 +1,3 @@
-# Copyright 2018 Anthony H Thomas and Arun Kumar
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from plot_utils import *
 
 def main():
@@ -17,13 +6,14 @@ def main():
     dist_svd_plots()
     criteo_plots()
     ml_dense_plots()
+    ml_sparse_plots()
     single_node_ml_plots()
     pipelines_plots()
 
 def sparse_matrix_plots():
     sparse_scale_dir = '../external/distributed_sparse/scale_mat_size'
     sparse_nodes_dir = '../external/distributed_sparse/scale_nodes'
-    legend_flag = True
+    #legend_flag = True
 
     filenames = os.listdir(sparse_scale_dir)
     filenames = filter(lambda x: '.log' not in x, filenames)
@@ -61,7 +51,7 @@ def sparse_matrix_plots():
                   xlab=xaxis_label,
                   ylab=yaxt_scale,
                   title_pref=title_stub_scale,
-                  legend=legend_flag_scale)
+                  legend=True)
 
         if op == 'ADD':
             make_plot(op, data_scale, sysnames,
@@ -96,7 +86,7 @@ def sparse_matrix_plots():
                   xlab='Nodes',
                   xticks=(ticks,labels),
                   title_pref=title_stub_nodes,
-                  legend=legend_flag_nodes)
+                  legend=True)
 
         ix += 1
 
@@ -148,7 +138,7 @@ def dense_matrix_plots():
                   xticks=(ticks,labels),
                   xlab=xaxis_label,
                   ylab=yaxt_scale,
-                  legend=legend_flag_scale)
+                  legend=True)
 
         if op == 'ADD':
             make_plot(op, data_scale, sysnames,
@@ -185,7 +175,7 @@ def dense_matrix_plots():
                   xticks=(ticks,labels),
                   title_pref=title_stub_nodes,
                   ylab=yaxt_nodes,
-                  legend=legend_flag_nodes)
+                  legend=True)
 
         data_single, sysnames = merge_data(single_node_paths, op,
                                            merge_var='rows',
@@ -199,11 +189,13 @@ def dense_matrix_plots():
                   depvar_name='depvar_rescaled',
                   logx=False,
                   logy=True,
+                  legend_cols=2,
+                  use_pbdr=False,
                   title_pref=title_stub_nodes,
                   xticks=(ticks,labels),
                   xlab=xaxis_label,
                   ylab=yaxt_nodes,
-                  legend=legend_flag_nodes)
+                  legend=True)
 
         # do CPU scaling tests too
         if op in ['TSM','ADD']:
@@ -229,13 +221,15 @@ def dense_matrix_plots():
                       depvar_name='rows',
                       logx=logx,
                       logy=True,
+                      use_pbdr=False,
                       title_pref=title_stub,
                       xticks=(ticks,labels),
                       xlab='Number of Cores',
                       ylab='Seconds',
-                      legend=lgd)
+                      legend=True)
 
             # make speedup cols
+            title_stub = '(C) ' if op == 'TSM' else '(D) '
             median_only = filter(lambda x: 'median' in x, data_cpu.columns)
             data_speedup = data_cpu.ix[:,['rows'] + median_only]
             for system in sysnames:
@@ -251,13 +245,16 @@ def dense_matrix_plots():
                       stub='_single_node_cpu_speedup',
                       depvar_name='rows',
                       errbars=False,
-                      logx=logx,
+                      logx=True,
                       logy=False,
+                      legend_cols=2,
+                      use_pbdr=False,
+                      legend_space=0.1,
                       title_pref=title_stub,
                       xticks=(ticks,labels),
                       xlab='Number of Cores',
                       ylab='Speedup',
-                      legend=False)
+                      legend=True)
 
             not_madlib = filter(lambda x: 'madlib' not in x, data_cpu.columns)
             ixm = sysnames.index('madlib')
@@ -268,6 +265,7 @@ def dense_matrix_plots():
                       depvar_name='rows',
                       logx=logx,
                       logy=True,
+                      use_pbdr=False,
                       title_pref=title_stub,
                       xticks=(ticks,labels),
                       xlab='Number of Cores',
@@ -326,12 +324,15 @@ def single_node_ml_plots():
                   depvar_name='num_procs',
                   stub='_cpu',
                   logx=True,
+                  use_pbdr=False,
                   logy=True,
                   title_pref=title_stub,
                   xticks=(ticks,labels),
                   xlab='Number of Cores',
                   ylab=ylab,
-                  legend=legend_flag)
+                  legend_cols=2,
+                  legend_space=0.1,
+                  legend=True)
 
         median_only = filter(lambda x: 'median' in x, data.columns)
         data_speedup = data.ix[:,['num_procs'] + median_only]
@@ -348,29 +349,37 @@ def single_node_ml_plots():
                   depvar_name='num_procs',
                   errbars=False,
                   logx=True,
+                  use_pbdr=False,
                   xticks=(ticks,labels),
                   title_pref=title_stub,
+                  legend_space=0.1,
+                  legend_cols=2,
                   logy=False,
                   xlab='Number of Cores',
                   ylab='Speedup',
-                  legend=False)
+                  legend=True)
 
-        madlib_cols = filter(lambda x: 'madlib' in x, data.columns)
-        data_nomadlib = data.drop(madlib_cols, axis='columns')
-        madlib_ix = sysnames.index('madlib')
-        sysnames.pop(madlib_ix)
+        # madlib_cols = filter(lambda x: 'madlib' in x, data.columns)
+        # data_nomadlib = data.drop(madlib_cols, axis='columns')
+        # madlib_ix = sysnames.index('madlib')
+        # sysnames.pop(madlib_ix)
+        
+        #varnames = filter(lambda x: 'num_procs' not in x, data.columns)
+        #data.loc[:,varnames] = np.log(data.loc[:,varnames])
 
-        logy = (op == 'robust')
-        make_plot(op, data_nomadlib, sysnames,
+        logy = True
+        make_plot(op, data, sysnames,
                   depvar_name='num_procs',
                   stub='_cpu_nomadlib',
                   logx=True,
                   logy=logy,
+                  legend_cols=2,
+                  use_pbdr=False,
                   title_pref=title_stub,
                   xticks=(ticks,labels),
                   xlab='Number of Cores',
                   ylab=ylab,
-                  legend=legend_flag)
+                  legend=True)
 
         if legend_flag:
             legend_flag = False
@@ -402,6 +411,11 @@ def criteo_plots():
         lambda x: ('.log' not in x) and ('adclick' in x), filenames)
     paths_la_dense = map(lambda x: os.path.join(la_algo_dir, x), filenames)
 
+    filenames = os.listdir(la_algo_dir)
+    filenames = filter(
+        lambda x: ('.log' not in x) and ('adclick' in x) and ('systemml' in x), filenames)
+    paths_la_sparse = map(lambda x: os.path.join('../external/sparse_la_algos', x), filenames)
+
     yaxis_label = 'Seconds'
     legend_flag = True
 
@@ -409,8 +423,7 @@ def criteo_plots():
     ix = 0
     for op in ['logit','reg','pca']:
         average_iters = op in ['logit','reg']
-        title_stub = '({}) '.format(stubs[ix])
-        ix = ix + 1
+        title_stub = '({}.i) '.format(stubs[ix])
         exclude = 'madlib' if (op == 'reg') and average_iters else None
         data_native_dense, sysnames = merge_data(paths_native_dense, op,
                                                  merge_var='nodes',
@@ -462,7 +475,11 @@ def criteo_plots():
         sysnames = filter(lambda x: 'median' in x, data_both.columns)
         sysnames = map(lambda x: x.replace('median_',''), sysnames)
         if op == 'logit':
-            make_plot(op, data_both, sysnames, legend_only=True)
+            make_plot(op, data_both, sysnames, 
+                use_stub=True, 
+                legend_only=True,
+                legend_cols=7)
+        print data_both
 
         data_both['plotvar'] = np.log2(data_both['nodes'])
         ticks = data_both['plotvar']
@@ -478,15 +495,28 @@ def criteo_plots():
                   title_pref=title_stub,
                   ylab=yaxis_label,
                   xticks=(ticks,labels),
-                  lab_placement=0.25,
                   legend=False)
 
+        title_stub = '({}.ii) '.format(stubs[ix])
         if not op == 'pca':
             data_native_sparse, sysnames = merge_data(paths_native_sparse, op,
                                                       merge_var='nodes',
                                                       average_iters=average_iters,
                                                       exclude_from_avg='madlib',
                                                       dtypes=np.float64)
+            # data_la_sparse, _ = merge_data(paths_la_sparse, op,
+            #                                merge_var='nodes',
+            #                                average_iters=average_iters,
+            #                                exclude_from_avg='madlib',
+            #                                dtypes=np.float64)
+            # sysml = filter(lambda x: 'systemml' in x and 'logit' in x, data_la_sparse.columns)
+            # data_native_sparse.loc[:, sysml] = data_la_sparse.loc[:,sysml]
+            data_native_sparse.columns = map(
+                lambda x: x.replace('systemml', 'systemml_driver_native'),
+                data_native_sparse.columns)
+
+            ix = sysnames.index('systemml')
+            sysnames[ix] = 'systemml_driver_native'
             data_native_sparse['plotvar'] = np.log2(data_native_sparse['nodes'])
             ticks = data_native_sparse['plotvar']
             labels = data_native_sparse['nodes']
@@ -495,10 +525,13 @@ def criteo_plots():
                       stub='_adclick_native_sparse',
                       logy=True,
                       xlab='Nodes',
+                      figsize=(7,5),
+                      text_pch=24,
+                      axis_pch=24,
                       title_pref=title_stub,
-                      ylab=yaxis_label,
+                      ylab='',
                       xticks=(ticks,labels),
-                      legend=legend_flag)
+                      legend=False)
 
         # make_plot(op, data_la, sysnames,
         #       depvar_name='nodes',
@@ -508,6 +541,7 @@ def criteo_plots():
         #       xlab='Nodes',
         #       ylab=yaxis_label,
         #       legend=legend_flag)
+        ix = ix + 1
 
         if legend_flag is True:
             legend_flag = False
@@ -538,7 +572,7 @@ def ml_dense_plots():
                                           average_iters=average_iters,
                                           dtypes=np.float64,
                                           insert_ix=rows)
-
+    
         toplot = scale_data.copy()
         toplot['log_rows'] = np.log10(scale_data['rows'])
         ticks = toplot['log_rows']
@@ -551,7 +585,7 @@ def ml_dense_plots():
                   xticks=(ticks, labels),
                   xlab='Million Rows',
                   ylab=yaxis_label,
-                  legend=legend_flag)
+                  legend=True)
 
         if legend_flag is True:
             legend_flag = False
@@ -565,7 +599,8 @@ def ml_sparse_plots():
 
     yaxis_label = 'Seconds'
     legend_flag = True
-    for op in ['gnmf','robust']:
+    for stub, op in zip(['A','B'],['gnmf','robust']):
+        title_stub = '({}) '.format(stub)
         average_iters = op in ['logit','gnmf']
         data, sysnames = merge_data(scale_paths, op,
                                     merge_var='sr',
@@ -574,17 +609,18 @@ def ml_sparse_plots():
         data['sr'] = '0.' + data['sr']
         data = data.astype(np.float64)
         data['sr'] = 100*data['sr']
-        ticks = np.log10(data['sr'])
+        ticks=data['sr']
         labels = data['sr']
         make_plot(op, data, sysnames,
                   depvar_name='sr',
                   stub='_sparse_la',
                   logy=True,
-                  logx=False,
+                  logx=True,
+                  title_pref=title_stub,
                   xticks=(ticks, labels),
                   xlab='Percentage nonzero values',
                   ylab=yaxis_label,
-                  legend=legend_flag)
+                  legend=True)
 
         if legend_flag is True:
             legend_flag = False
@@ -599,18 +635,19 @@ def pipelines_plots():
                                 merge_var='rows',
                                 dtypes=np.float64)
 
-    labels = data['rows']*1e-6
+    labels = ['{}'.format(x) for x in data['rows']*1e-6]
     data['rows'] = np.log10(data['rows'])
     ticks = data['rows']
     make_plot('pipelines', data, sysnames,
               depvar_name='rows',
               stub='_dist',
               logy=True,
+              logx=False,
               title_pref='(B) ',
               xticks=(ticks,labels),
               xlab='Million Rows',
               ylab='Log Seconds',
-              legend=False)
+              legend=True)
 
 if __name__=='__main__':
     main()

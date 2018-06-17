@@ -1,14 +1,3 @@
-# Copyright 2018 Anthony H Thomas and Arun Kumar
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import os
 import json
 
@@ -22,19 +11,19 @@ plt.style.use('seaborn-muted')
 rc('font', weight='bold')
 
 OPLABELS = {
-    "NORM":   "MAT.2: NORM",
-    "MVM":    "MAT.4: MVM",
-    "ADD":    "MAT.5: ADD",
-    "GMM":    "MAT.6: GMM",
-    "TSM":    "MAT.3: GRM",
-    "TRANS":  "MAT.1: TRANS",
-    "reg":    "ALG.1: OLS",
-    "logit":  "ALG.2: LR",
-    "gnmf":   "ALG.3: NMF",
-    "robust": "ALG.4: HRSE",
+    "NORM":   "NORM",
+    "MVM":    "MVM",
+    "ADD":    "ADD",
+    "GMM":    "GMM",
+    "TSM":    "GRM",
+    "TRANS":  "TRANS",
+    "reg":    "OLS",
+    "logit":  "LR",
+    "gnmf":   "NMF",
+    "robust": "HRSE",
     "pca":    "PCA",
-    "SVD":    "PIPE.2: SVD",
-    "pipelines": "PIPE.2: MMC"
+    "SVD":    "SVD",
+    "pipelines": "MMC"
 }
 
 def make_plot(op, data, sysnames,
@@ -43,14 +32,19 @@ def make_plot(op, data, sysnames,
               figsize=(7,4),
               legend_only=False,
               errbars=True,
-              legend=False,
+              legend=True,
               ticks='in',
               xticks=None,
+              yticks=None,
+              use_pbdr=True,
               logx=False,
               logy=False,
+              use_stub=False,
+              legend_space=0.08,
               title_pref='',
               text_pch=18,
               axis_pch=20,
+              legend_cols=1,
               xlab=None,
               ylab=None,
               lab_placement=0.5,
@@ -61,6 +55,9 @@ def make_plot(op, data, sysnames,
 
     with open('plot_styles.json', 'rb') as fh:
         meta = json.load(fh)
+    
+    if use_pbdr:
+        meta['R']['pretty-name'] = 'pbdR'
 
     handle = plt.figure(figsize=figsize)
 
@@ -72,6 +69,12 @@ def make_plot(op, data, sysnames,
     plt.tick_params(labelsize=text_pch)
     if xticks is not None:
         plt.xticks(*xticks)
+    if yticks is not None:
+        plt.yticks(*yticks)
+
+    if use_stub:
+        for sys in meta:
+            meta[sys]['pretty-name'] = meta[sys]['pretty-name'] + meta[sys].get('stub','')
 
     for sys in sorted(sysnames):
         colnames = [depvar_name] + filter(lambda x: sys in x, data.columns)
@@ -84,7 +87,8 @@ def make_plot(op, data, sysnames,
         plt.axes().get_yaxis().set_visible(False)
         plt.box(False)
         lgd = plt.legend(handles, labels, fancybox=True,
-                 framealpha=1, frameon=False, loc=7, fontsize='large')
+                 framealpha=1, ncol=legend_cols, 
+                 frameon=False, loc=7, fontsize='large')
         plt.savefig(
             '../output/{}{}_legend.png'.format(op, stub), bbox_inches='tight')
         plt.close()
@@ -108,7 +112,9 @@ def make_plot(op, data, sysnames,
         plt.ylabel(ylab, fontsize=axis_pch, fontweight='bold')
     if legend:
         lgd = plt.legend(handles, labels, fancybox=True,
-                         framealpha=.5, loc='best')
+                         framealpha=.5, loc='center', 
+                         ncol=len(labels)/legend_cols,
+                         bbox_to_anchor=(0.5,1.0 + legend_space))
 
     plt.savefig('../output/{}{}.png'.format(op, stub), bbox_inches='tight')
     plt.close()
@@ -134,7 +140,7 @@ def _make_subplot(data, depvar_name, sysmeta, errbars=True, noplot=False):
     else:
         plt.plot(data[depvar_name],
                  data[median_col],
-                 linewidth=1.5,
+                 linewidth=2.5,
                  markersize=12,
                  marker=sysmeta['pty'],
                  dashes=sysmeta['lty'],

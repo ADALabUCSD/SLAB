@@ -1,0 +1,1249 @@
+[info] Loading project definition from /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/systemml/project
+[info] Set current project to SystemMLMatrixOps (in build file:/home/ubuntu/SLAB/tests/SimpleMatrixOps%20(Distributed%20Sparse)/src/systemml/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Including from cache: SystemML.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/DEPENDENCIES' with strategy 'discard'
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.xml' with strategy 'discard'
+[warn] Strategy 'discard' was applied to 6 files
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar
+[success] Total time: 2 s, completed May 28, 2018 12:34:19 AM
+[info] Loading project definition from /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/mllib/project
+[info] Set current project to MLLibMatrixops (in build file:/home/ubuntu/SLAB/tests/SimpleMatrixOps%20(Distributed%20Sparse)/src/mllib/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Strategy 'discard' was applied to a file
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar
+[success] Total time: 2 s, completed May 28, 2018 12:34:27 AM
+-rw-r--r--   1 ubuntu supergroup         77 2018-05-26 20:32 /scratch/pass.csv
+
+Welcome to Apache SystemML!
+
+Evaluating: TRANS
+Executing DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ M = read(Mpath)
+ K = sum( M )
+ print(K)
+ 
+ 
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if (K > 0.0) {
+       start = utils::time(1)
+   }
+   R = t(M)
+   if (K > 0.0) {
+       tmp = utils::printRandElements(R, 10)
+   }
+   if (K > 0.0) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+        
+# EXPLAIN (RUNTIME):
+# Memory Budget local/remote = 20389MB/20180MB/24216MB/4238MB
+# Degree of Parallelism (vcores) local/remote = 24/9
+PROGRAM ( size CP/SP = 69/5 )
+--FUNCTIONS
+----FUNCTION CALL GRAPH
+------MAIN PROGRAM
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::time
+----FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements [recompile=false]
+------GENERIC (lines 0-0) [recompile=false]
+------FOR (lines 0-0)
+--------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+--------CP assignvar 10.SCALAR.INT.true __pred.SCALAR.INT
+--------GENERIC (lines 24-30) [recompile=false]
+----------CP createvar _mVar0 scratch_space//_p19245_10.11.10.10//_t0/temp0 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 100 1.0 -1 uniform 1.0 24 _mVar0.MATRIX.DOUBLE
+----------CP castdts _mVar0.MATRIX.DOUBLE.false _Var1.SCALAR.DOUBLE
+----------CP rmvar _mVar0
+----------CP castvti _Var1.SCALAR.DOUBLE.false _Var2.SCALAR.INT
+----------CP rmvar _Var1
+----------CP createvar _mVar3 scratch_space//_p19245_10.11.10.10//_t0/temp1 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 125000000 1.0 -1 uniform 1.0 24 _mVar3.MATRIX.DOUBLE
+----------CP castdts _mVar3.MATRIX.DOUBLE.false _Var4.SCALAR.DOUBLE
+----------CP rmvar _mVar3
+----------CP castvti _Var4.SCALAR.DOUBLE.false _Var5.SCALAR.INT
+----------CP rmvar _Var4
+----------CP createvar _mVar6 scratch_space//_p19245_10.11.10.10//_t0/temp2 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+----------CP rightIndex M.MATRIX.DOUBLE _Var2.SCALAR.INT.false _Var2.SCALAR.INT.false _Var5.SCALAR.INT.false _Var5.SCALAR.INT.false _mVar6.MATRIX.DOUBLE
+----------CP rmvar _Var2 _Var5
+----------CP castdts _mVar6.MATRIX.DOUBLE.false _Var7.SCALAR.STRING
+----------CP rmvar _mVar6
+----------CP print _Var7.SCALAR.STRING.false _Var8.SCALAR.STRING
+----------CP rmvar _Var7 _Var8
+----EXTERNAL FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::time
+--MAIN PROGRAM
+----GENERIC (lines 1-11) [recompile=false]
+------CP createvar pREADM /scratch/M_01100_sparse_tall.mtx false MATRIX matrixmarket 125000000 100 -1 -1 124376342 copy
+------CP createvar _mVar9 scratch_space//_p19245_10.11.10.10//_t0/temp3 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK rblk pREADM.MATRIX.DOUBLE _mVar9.MATRIX.DOUBLE 1000 1000 true
+------CP createvar _mVar10 scratch_space//_p19245_10.11.10.10//_t0/temp4 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint _mVar9.MATRIX.DOUBLE _mVar10.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar _mVar9
+------CP createvar _mVar11 scratch_space//_p19245_10.11.10.10//_t0/temp5 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+------SPARK uak+ _mVar10.MATRIX.DOUBLE _mVar11.MATRIX.DOUBLE SINGLE_BLOCK
+------CP castdts _mVar11.MATRIX.DOUBLE.false _Var12.SCALAR.DOUBLE
+------CP rmvar _mVar11
+------CP createvar _mVar13 scratch_space//_p19245_10.11.10.10//_t0/temp6 true MATRIX binaryblock 5 1 1000 1000 0 copy
+------CP rand 5.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 0.0 0.0 1.0 -1 uniform 1.0 24 _mVar13.MATRIX.DOUBLE
+------CP print _Var12.SCALAR.DOUBLE.false _Var14.SCALAR.STRING
+------CP mvvar _Var12 K
+------CP cpvar _mVar10 M
+------CP rmvar _Var14
+------CP cpvar _mVar13 times
+------CP rmvar _mVar10 _mVar13
+----GENERIC (lines 0-0) [recompile=false]
+------CP createvar _mVar15 scratch_space//_p19245_10.11.10.10//_t0/temp7 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint M.MATRIX.DOUBLE _mVar15.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar M
+------CP cpvar _mVar15 M
+------CP rmvar _mVar15
+----FOR (lines 0-0) [in-place=[times]]
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 5.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------IF (lines 13-15)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var16.SCALAR.BOOLEAN
+--------CP mvvar _Var16 __pred
+--------GENERIC (lines 14-14) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true start
+------GENERIC (lines 16-16) [recompile=false]
+--------CP createvar _mVar17 scratch_space//_p19245_10.11.10.10//_t0/temp8 true MATRIX binaryblock 100 125000000 1000 1000 124376342 copy
+--------SPARK r' M.MATRIX.DOUBLE _mVar17.MATRIX.DOUBLE
+--------CP cpvar _mVar17 R
+--------CP rmvar _mVar17
+------IF (lines 17-19)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var18.SCALAR.BOOLEAN
+--------CP mvvar _Var18 __pred
+--------GENERIC (lines 18-18) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml printRandElements 2 1 R.MATRIX.DOUBLE 10.SCALAR.INT.true tmp
+----------CP rmvar R
+------IF (lines 20-22)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var19.SCALAR.BOOLEAN
+--------CP mvvar _Var19 __pred
+--------GENERIC (lines 21-21) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true stop
+------GENERIC (lines 23-23) [recompile=false]
+--------CP - stop.SCALAR.DOUBLE.false start.SCALAR.DOUBLE.false _Var20.SCALAR.DOUBLE
+--------CP / _Var20.SCALAR.DOUBLE.false 1000.SCALAR.INT.true _Var21.SCALAR.DOUBLE
+--------CP rmvar _Var20
+--------CP createvar _mVar22 scratch_space//_p19245_10.11.10.10//_t0/temp9 true MATRIX binaryblock 5 1 1000 1000 -1 copy
+--------CP leftIndex times.MATRIX.DOUBLE _Var21.SCALAR.DOUBLE.false ix.SCALAR.INT.false ix.SCALAR.INT.false 1.SCALAR.INT.true 1.SCALAR.INT.true _mVar22.MATRIX.DOUBLE
+--------CP rmvar _Var21 times
+--------CP cpvar _mVar22 times
+--------CP rmvar _mVar22
+----GENERIC (lines 25-27) [recompile=false]
+------CP createvar _mVar23 scratch_space//_p19245_10.11.10.10//_t0/temp10 true MATRIX binaryblock 1 5 1000 1000 -1 copy
+------CP r' times.MATRIX.DOUBLE _mVar23.MATRIX.DOUBLE 24
+------CP rmvar times
+------CP cpvar _mVar23 times
+------CP rmvar _mVar23 times
+
+1.868777818927162E8
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+SystemML Statistics:
+Total execution time:		205.280 sec.
+Number of executed Spark inst:	9.
+
+101 125000001
+
+Welcome to Apache SystemML!
+
+Evaluating: MVM
+Executing DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ M = read(Mpath)
+ K = sum( M )
+ print(K)
+ w = rand(rows=ncol(M), cols=1)
+ print(sum(w))
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if (K > 0.0) {
+       start = utils::time(1)
+   }
+   R = M %*% w
+   if (K > 0.0) {
+       tmp = utils::printRandElements(R, 10)
+   }
+   if (K > 0.0) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+        
+# EXPLAIN (RUNTIME):
+# Memory Budget local/remote = 20389MB/10090MB/12108MB/4238MB
+# Degree of Parallelism (vcores) local/remote = 24/3
+PROGRAM ( size CP/SP = 78/6 )
+--FUNCTIONS
+----FUNCTION CALL GRAPH
+------MAIN PROGRAM
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::time
+----FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements [recompile=false]
+------GENERIC (lines 0-0) [recompile=false]
+------FOR (lines 0-0)
+--------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+--------CP assignvar 10.SCALAR.INT.true __pred.SCALAR.INT
+--------GENERIC (lines 24-30) [recompile=false]
+----------CP createvar _mVar0 scratch_space//_p21877_10.11.10.10//_t0/temp0 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 125000000 1.0 -1 uniform 1.0 24 _mVar0.MATRIX.DOUBLE
+----------CP castdts _mVar0.MATRIX.DOUBLE.false _Var1.SCALAR.DOUBLE
+----------CP rmvar _mVar0
+----------CP castvti _Var1.SCALAR.DOUBLE.false _Var2.SCALAR.INT
+----------CP rmvar _Var1
+----------CP createvar _mVar3 scratch_space//_p21877_10.11.10.10//_t0/temp1 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 1 1.0 -1 uniform 1.0 24 _mVar3.MATRIX.DOUBLE
+----------CP castdts _mVar3.MATRIX.DOUBLE.false _Var4.SCALAR.DOUBLE
+----------CP rmvar _mVar3
+----------CP castvti _Var4.SCALAR.DOUBLE.false _Var5.SCALAR.INT
+----------CP rmvar _Var4
+----------CP createvar _mVar6 scratch_space//_p21877_10.11.10.10//_t0/temp2 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+----------CP rightIndex M.MATRIX.DOUBLE _Var2.SCALAR.INT.false _Var2.SCALAR.INT.false _Var5.SCALAR.INT.false _Var5.SCALAR.INT.false _mVar6.MATRIX.DOUBLE
+----------CP rmvar _Var2 _Var5
+----------CP castdts _mVar6.MATRIX.DOUBLE.false _Var7.SCALAR.STRING
+----------CP rmvar _mVar6
+----------CP print _Var7.SCALAR.STRING.false _Var8.SCALAR.STRING
+----------CP rmvar _Var7 _Var8
+----EXTERNAL FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::time
+--MAIN PROGRAM
+----GENERIC (lines 1-11) [recompile=false]
+------CP createvar pREADM /scratch/M_01100_sparse_tall.mtx false MATRIX matrixmarket 125000000 100 -1 -1 124376342 copy
+------CP createvar _mVar9 scratch_space//_p21877_10.11.10.10//_t0/temp3 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK rblk pREADM.MATRIX.DOUBLE _mVar9.MATRIX.DOUBLE 1000 1000 true
+------CP createvar _mVar10 scratch_space//_p21877_10.11.10.10//_t0/temp4 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK compress _mVar9.MATRIX.DOUBLE _mVar10.MATRIX.DOUBLE
+------CP rmvar _mVar9
+------CP createvar _mVar11 scratch_space//_p21877_10.11.10.10//_t0/temp5 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint _mVar10.MATRIX.DOUBLE _mVar11.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar _mVar10
+------CP createvar _mVar12 scratch_space//_p21877_10.11.10.10//_t0/temp6 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+------SPARK uak+ _mVar11.MATRIX.DOUBLE _mVar12.MATRIX.DOUBLE SINGLE_BLOCK
+------CP castdts _mVar12.MATRIX.DOUBLE.false _Var13.SCALAR.DOUBLE
+------CP rmvar _mVar12
+------CP createvar _mVar14 scratch_space//_p21877_10.11.10.10//_t0/temp7 true MATRIX binaryblock 100 1 1000 1000 100 copy
+------CP rand 100.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 0.0 1.0 1.0 -1 uniform 1.0 24 _mVar14.MATRIX.DOUBLE
+------CP uak+ _mVar14.MATRIX.DOUBLE _Var15.SCALAR.STRING 24
+------CP createvar _mVar16 scratch_space//_p21877_10.11.10.10//_t0/temp8 true MATRIX binaryblock 5 1 1000 1000 0 copy
+------CP rand 5.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 0.0 0.0 1.0 -1 uniform 1.0 24 _mVar16.MATRIX.DOUBLE
+------CP print _Var13.SCALAR.DOUBLE.false _Var17.SCALAR.STRING
+------CP print _Var15.SCALAR.STRING.false _Var18.SCALAR.STRING
+------CP rmvar _Var15
+------CP mvvar _Var13 K
+------CP cpvar _mVar11 M
+------CP rmvar _Var17
+------CP cpvar _mVar14 w
+------CP rmvar _Var18
+------CP cpvar _mVar16 times
+------CP rmvar _mVar11 _mVar14 _mVar16
+----GENERIC (lines 0-0) [recompile=false]
+------CP createvar _mVar19 scratch_space//_p21877_10.11.10.10//_t0/temp9 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint M.MATRIX.DOUBLE _mVar19.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar M
+------CP cpvar _mVar19 M
+------CP rmvar _mVar19
+----FOR (lines 0-0) [in-place=[times]]
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 5.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------IF (lines 13-15)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var20.SCALAR.BOOLEAN
+--------CP mvvar _Var20 __pred
+--------GENERIC (lines 14-14) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true start
+------GENERIC (lines 16-16) [recompile=true]
+--------CP createvar _mVar21 scratch_space//_p21877_10.11.10.10//_t0/temp10 true MATRIX binaryblock 125000000 1 1000 1000 -1 copy
+--------SPARK mapmm M.MATRIX.DOUBLE w.MATRIX.DOUBLE _mVar21.MATRIX.DOUBLE RIGHT true NONE
+--------CP cpvar _mVar21 R
+--------CP rmvar _mVar21
+------IF (lines 17-19)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var22.SCALAR.BOOLEAN
+--------CP mvvar _Var22 __pred
+--------GENERIC (lines 18-18) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml printRandElements 2 1 R.MATRIX.DOUBLE 10.SCALAR.INT.true tmp
+----------CP rmvar R
+------IF (lines 20-22)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var23.SCALAR.BOOLEAN
+--------CP mvvar _Var23 __pred
+--------GENERIC (lines 21-21) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true stop
+------GENERIC (lines 23-23) [recompile=false]
+--------CP - stop.SCALAR.DOUBLE.false start.SCALAR.DOUBLE.false _Var24.SCALAR.DOUBLE
+--------CP / _Var24.SCALAR.DOUBLE.false 1000.SCALAR.INT.true _Var25.SCALAR.DOUBLE
+--------CP rmvar _Var24
+--------CP createvar _mVar26 scratch_space//_p21877_10.11.10.10//_t0/temp11 true MATRIX binaryblock 5 1 1000 1000 -1 copy
+--------CP leftIndex times.MATRIX.DOUBLE _Var25.SCALAR.DOUBLE.false ix.SCALAR.INT.false ix.SCALAR.INT.false 1.SCALAR.INT.true 1.SCALAR.INT.true _mVar26.MATRIX.DOUBLE
+--------CP rmvar _Var25 times
+--------CP cpvar _mVar26 times
+--------CP rmvar _mVar26
+----GENERIC (lines 25-27) [recompile=false]
+------CP createvar _mVar27 scratch_space//_p21877_10.11.10.10//_t0/temp12 true MATRIX binaryblock 1 5 1000 1000 -1 copy
+------CP r' times.MATRIX.DOUBLE _mVar27.MATRIX.DOUBLE 24
+------CP rmvar times
+------CP cpvar _mVar27 times
+------CP rmvar _mVar27 times
+
+1.868777818927162E8
+46.83096019796889
+0.3886878501472377
+0.0
+0.0
+0.0
+0.8724164487918933
+0.19020377670044566
+0.24069395623606557
+0.0
+0.17437850061477503
+0.20497867062409447
+0.0
+0.024870761659824443
+0.0
+0.0
+0.0
+0.5590165200079417
+0.16654160746755484
+0.4311377965827839
+0.0
+0.0
+0.0
+0.019978340578536088
+0.015143317764283772
+0.7494209502454091
+0.06951086664356561
+0.6528560254742816
+0.45541705819838035
+0.29702231034508
+0.5706424681694481
+0.5007276408082956
+0.8249370637065745
+0.012761828104269521
+0.0562978300925215
+0.08972148177336414
+0.0
+0.43519585208286393
+0.018717054283738717
+0.2092090684367829
+0.0
+0.0
+0.006793038563121044
+0.0
+0.18632788038008127
+0.1531811646383029
+0.0
+0.9075623485683004
+0.0
+0.5677692581366096
+0.0
+0.0
+SystemML Statistics:
+Total execution time:		159.140 sec.
+Number of executed Spark inst:	10.
+
+101 125000001
+79006638
+
+Welcome to Apache SystemML!
+
+Evaluating: NORM
+Executing DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ M = read(Mpath)
+ K = sum( M )
+ print(K)
+ 
+ 
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if (K > 0.0) {
+       start = utils::time(1)
+   }
+   R = sqrt(sum(M^2))
+   if (K > 0.0) {
+       print(R)
+   }
+   if (K > 0.0) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+        
+# EXPLAIN (RUNTIME):
+# Memory Budget local/remote = 20389MB/50450MB/60540MB/4238MB
+# Degree of Parallelism (vcores) local/remote = 24/21
+PROGRAM ( size CP/SP = 53/6 )
+--FUNCTIONS
+----FUNCTION CALL GRAPH
+------MAIN PROGRAM
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::time
+----EXTERNAL FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::time
+--MAIN PROGRAM
+----GENERIC (lines 1-11) [recompile=false]
+------CP createvar pREADM /scratch/M_01100_sparse_tall.mtx false MATRIX matrixmarket 125000000 100 -1 -1 124376342 copy
+------CP createvar _mVar0 scratch_space//_p24463_10.11.10.10//_t0/temp0 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK rblk pREADM.MATRIX.DOUBLE _mVar0.MATRIX.DOUBLE 1000 1000 true
+------CP createvar _mVar1 scratch_space//_p24463_10.11.10.10//_t0/temp1 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK compress _mVar0.MATRIX.DOUBLE _mVar1.MATRIX.DOUBLE
+------CP rmvar _mVar0
+------CP createvar _mVar2 scratch_space//_p24463_10.11.10.10//_t0/temp2 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint _mVar1.MATRIX.DOUBLE _mVar2.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar _mVar1
+------CP createvar _mVar3 scratch_space//_p24463_10.11.10.10//_t0/temp3 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+------SPARK uak+ _mVar2.MATRIX.DOUBLE _mVar3.MATRIX.DOUBLE SINGLE_BLOCK
+------CP castdts _mVar3.MATRIX.DOUBLE.false _Var4.SCALAR.DOUBLE
+------CP rmvar _mVar3
+------CP createvar _mVar5 scratch_space//_p24463_10.11.10.10//_t0/temp4 true MATRIX binaryblock 5 1 1000 1000 0 copy
+------CP rand 5.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 0.0 0.0 1.0 -1 uniform 1.0 24 _mVar5.MATRIX.DOUBLE
+------CP print _Var4.SCALAR.DOUBLE.false _Var6.SCALAR.STRING
+------CP mvvar _Var4 K
+------CP cpvar _mVar2 M
+------CP rmvar _Var6
+------CP cpvar _mVar5 times
+------CP rmvar _mVar2 _mVar5
+----GENERIC (lines 0-0) [recompile=false]
+------CP createvar _mVar7 scratch_space//_p24463_10.11.10.10//_t0/temp5 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint M.MATRIX.DOUBLE _mVar7.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar M
+------CP cpvar _mVar7 M
+------CP rmvar _mVar7
+----FOR (lines 0-0) [in-place=[times]]
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 5.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------IF (lines 13-15)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var8.SCALAR.BOOLEAN
+--------CP mvvar _Var8 __pred
+--------GENERIC (lines 14-14) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true start
+------GENERIC (lines 16-16) [recompile=false]
+--------CP createvar _mVar9 scratch_space//_p24463_10.11.10.10//_t0/temp6 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+--------SPARK uasqk+ M.MATRIX.DOUBLE _mVar9.MATRIX.DOUBLE SINGLE_BLOCK
+--------CP castdts _mVar9.MATRIX.DOUBLE.false _Var10.SCALAR.DOUBLE
+--------CP rmvar _mVar9
+--------CP sqrt _Var10.SCALAR.DOUBLE.false _Var11.SCALAR.DOUBLE
+--------CP rmvar _Var10
+--------CP mvvar _Var11 R
+------IF (lines 17-19)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var12.SCALAR.BOOLEAN
+--------CP mvvar _Var12 __pred
+--------GENERIC (lines 18-18) [recompile=false]
+----------CP print R.SCALAR.DOUBLE.false _Var13.SCALAR.STRING
+----------CP rmvar _Var13 R
+------IF (lines 20-22)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var14.SCALAR.BOOLEAN
+--------CP mvvar _Var14 __pred
+--------GENERIC (lines 21-21) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true stop
+------GENERIC (lines 23-23) [recompile=false]
+--------CP - stop.SCALAR.DOUBLE.false start.SCALAR.DOUBLE.false _Var15.SCALAR.DOUBLE
+--------CP / _Var15.SCALAR.DOUBLE.false 1000.SCALAR.INT.true _Var16.SCALAR.DOUBLE
+--------CP rmvar _Var15
+--------CP createvar _mVar17 scratch_space//_p24463_10.11.10.10//_t0/temp7 true MATRIX binaryblock 5 1 1000 1000 -1 copy
+--------CP leftIndex times.MATRIX.DOUBLE _Var16.SCALAR.DOUBLE.false ix.SCALAR.INT.false ix.SCALAR.INT.false 1.SCALAR.INT.true 1.SCALAR.INT.true _mVar17.MATRIX.DOUBLE
+--------CP rmvar _Var16 times
+--------CP cpvar _mVar17 times
+--------CP rmvar _mVar17
+----GENERIC (lines 25-27) [recompile=false]
+------CP createvar _mVar18 scratch_space//_p24463_10.11.10.10//_t0/temp8 true MATRIX binaryblock 1 5 1000 1000 -1 copy
+------CP r' times.MATRIX.DOUBLE _mVar18.MATRIX.DOUBLE 24
+------CP rmvar times
+------CP cpvar _mVar18 times
+------CP rmvar _mVar18 times
+
+1.868777818927162E8
+1.2437634216876768E8
+1.2437634216876768E8
+1.2437634216876768E8
+1.2437634216876768E8
+1.2437634216876768E8
+SystemML Statistics:
+Total execution time:		120.141 sec.
+Number of executed Spark inst:	10.
+
+Writing 0 of 1.0 chunks
+WARNING: File exists. No data copied
+Running: spark-submit --class SystemMLMatrixOps 
+
+
+
+
+  
+./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps 
+
+
+
+
+  
+./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps 
+
+
+
+
+  
+./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../outp101 125000001
+79006638
+6479.306698663989
+6479.306698663991
+6479.30669866399
+6479.306698663989
+6479.306698663989
+
+Welcome to Apache SystemML!
+
+Evaluating: TSM
+Executing DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ M = read(Mpath)
+ K = sum( M )
+ print(K)
+ 
+ 
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if (K > 0.0) {
+       start = utils::time(1)
+   }
+   R = t(M) %*% M
+   if (K > 0.0) {
+       tmp = utils::printRandElements(R, 10)
+   }
+   if (K > 0.0) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+        
+# EXPLAIN (RUNTIME):
+# Memory Budget local/remote = 20389MB/10090MB/12108MB/4238MB
+# Degree of Parallelism (vcores) local/remote = 24/2
+PROGRAM ( size CP/SP = 69/5 )
+--FUNCTIONS
+----FUNCTION CALL GRAPH
+------MAIN PROGRAM
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::time
+----FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements [recompile=false]
+------GENERIC (lines 0-0) [recompile=false]
+------FOR (lines 0-0)
+--------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+--------CP assignvar 10.SCALAR.INT.true __pred.SCALAR.INT
+--------GENERIC (lines 24-30) [recompile=false]
+----------CP createvar _mVar0 scratch_space//_p27045_10.11.10.10//_t0/temp0 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 100 1.0 -1 uniform 1.0 24 _mVar0.MATRIX.DOUBLE
+----------CP castdts _mVar0.MATRIX.DOUBLE.false _Var1.SCALAR.DOUBLE
+----------CP rmvar _mVar0
+----------CP castvti _Var1.SCALAR.DOUBLE.false _Var2.SCALAR.INT
+----------CP rmvar _Var1
+----------CP createvar _mVar3 scratch_space//_p27045_10.11.10.10//_t0/temp1 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 100 1.0 -1 uniform 1.0 24 _mVar3.MATRIX.DOUBLE
+----------CP castdts _mVar3.MATRIX.DOUBLE.false _Var4.SCALAR.DOUBLE
+----------CP rmvar _mVar3
+----------CP castvti _Var4.SCALAR.DOUBLE.false _Var5.SCALAR.INT
+----------CP rmvar _Var4
+----------CP createvar _mVar6 scratch_space//_p27045_10.11.10.10//_t0/temp2 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+----------CP rightIndex M.MATRIX.DOUBLE _Var2.SCALAR.INT.false _Var2.SCALAR.INT.false _Var5.SCALAR.INT.false _Var5.SCALAR.INT.false _mVar6.MATRIX.DOUBLE
+----------CP rmvar _Var2 _Var5
+----------CP castdts _mVar6.MATRIX.DOUBLE.false _Var7.SCALAR.STRING
+----------CP rmvar _mVar6
+----------CP print _Var7.SCALAR.STRING.false _Var8.SCALAR.STRING
+----------CP rmvar _Var7 _Var8
+----EXTERNAL FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::time
+--MAIN PROGRAM
+----GENERIC (lines 1-11) [recompile=false]
+------CP createvar pREADM /scratch/M_01100_sparse_tall.mtx false MATRIX matrixmarket 125000000 100 -1 -1 124376342 copy
+------CP createvar _mVar9 scratch_space//_p27045_10.11.10.10//_t0/temp3 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK rblk pREADM.MATRIX.DOUBLE _mVar9.MATRIX.DOUBLE 1000 1000 true
+------CP createvar _mVar10 scratch_space//_p27045_10.11.10.10//_t0/temp4 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint _mVar9.MATRIX.DOUBLE _mVar10.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar _mVar9
+------CP createvar _mVar11 scratch_space//_p27045_10.11.10.10//_t0/temp5 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+------SPARK uak+ _mVar10.MATRIX.DOUBLE _mVar11.MATRIX.DOUBLE SINGLE_BLOCK
+------CP castdts _mVar11.MATRIX.DOUBLE.false _Var12.SCALAR.DOUBLE
+------CP rmvar _mVar11
+------CP createvar _mVar13 scratch_space//_p27045_10.11.10.10//_t0/temp6 true MATRIX binaryblock 5 1 1000 1000 0 copy
+------CP rand 5.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 0.0 0.0 1.0 -1 uniform 1.0 24 _mVar13.MATRIX.DOUBLE
+------CP print _Var12.SCALAR.DOUBLE.false _Var14.SCALAR.STRING
+------CP mvvar _Var12 K
+------CP cpvar _mVar10 M
+------CP rmvar _Var14
+------CP cpvar _mVar13 times
+------CP rmvar _mVar10 _mVar13
+----GENERIC (lines 0-0) [recompile=false]
+------CP createvar _mVar15 scratch_space//_p27045_10.11.10.10//_t0/temp7 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint M.MATRIX.DOUBLE _mVar15.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar M
+------CP cpvar _mVar15 M
+------CP rmvar _mVar15
+----FOR (lines 0-0) [in-place=[times]]
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 5.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------IF (lines 13-15)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var16.SCALAR.BOOLEAN
+--------CP mvvar _Var16 __pred
+--------GENERIC (lines 14-14) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true start
+------GENERIC (lines 16-16) [recompile=true]
+--------CP createvar _mVar17 scratch_space//_p27045_10.11.10.10//_t0/temp8 true MATRIX binaryblock 100 100 1000 1000 -1 copy
+--------SPARK tsmm M.MATRIX.DOUBLE _mVar17.MATRIX.DOUBLE LEFT
+--------CP cpvar _mVar17 R
+--------CP rmvar _mVar17
+------IF (lines 17-19)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var18.SCALAR.BOOLEAN
+--------CP mvvar _Var18 __pred
+--------GENERIC (lines 18-18) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml printRandElements 2 1 R.MATRIX.DOUBLE 10.SCALAR.INT.true tmp
+----------CP rmvar R
+------IF (lines 20-22)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var19.SCALAR.BOOLEAN
+--------CP mvvar _Var19 __pred
+--------GENERIC (lines 21-21) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true stop
+------GENERIC (lines 23-23) [recompile=false]
+--------CP - stop.SCALAR.DOUBLE.false start.SCALAR.DOUBLE.false _Var20.SCALAR.DOUBLE
+--------CP / _Var20.SCALAR.DOUBLE.false 1000.SCALAR.INT.true _Var21.SCALAR.DOUBLE
+--------CP rmvar _Var20
+--------CP createvar _mVar22 scratch_space//_p27045_10.11.10.10//_t0/temp9 true MATRIX binaryblock 5 1 1000 1000 -1 copy
+--------CP leftIndex times.MATRIX.DOUBLE _Var21.SCALAR.DOUBLE.false ix.SCALAR.INT.false ix.SCALAR.INT.false 1.SCALAR.INT.true 1.SCALAR.INT.true _mVar22.MATRIX.DOUBLE
+--------CP rmvar _Var21 times
+--------CP cpvar _mVar22 times
+--------CP rmvar _mVar22
+----GENERIC (lines 25-27) [recompile=false]
+------CP createvar _mVar23 scratch_space//_p27045_10.11.10.10//_t0/temp10 true MATRIX binaryblock 1 5 1000 1000 -1 copy
+------CP r' times.MATRIX.DOUBLE _mVar23.MATRIX.DOUBLE 24
+------CP rmvar times
+------CP cpvar _mVar23 times
+------CP rmvar _mVar23 times
+
+1.868777818927162E8
+3152.6880985144794
+3114.7493428207217
+3099.0928012439967
+3091.032100784571
+3081.425181737835
+3115.9085061383926
+3171.3266312263054
+3171.247510109714
+3127.7653980539358
+3145.2688228166403
+3143.8025595679774
+3111.7757451763714
+3069.2415149562166
+3069.079081709905
+3151.9060792046103
+3117.7590779907396
+3126.414541993164
+3121.8406852454837
+3090.1041365394017
+3102.4321373480752
+3101.014747035254
+3079.5386992159924
+3171.5379661385277
+3173.207495735776
+3043.966385838475
+3148.230409130414
+3109.3488391494416
+3173.7595517718023
+3125.868498813461
+3114.3936991326914
+3065.1668055719106
+3065.1800845055795
+3181.0089349930877
+3130.1444798801563
+3155.2110763618225
+3098.504721926792
+3112.088476853256
+3141.7993241015934
+3161.505881845442
+3176.778317429109
+3145.2279565145923
+3138.6343227964107
+3095.559962895262
+3107.9467781081125
+3121.8503179062923
+3071.5644975933333
+3129.818480405966
+3087.4203248232666
+3086.805508253907
+3106.629806964148
+SystemML Statistics:
+Total execution time:		77.782 sec.
+Number of executed Spark inst:	9.
+
+101 125000001
+79006638
+
+Welcome to Apache SystemML!
+
+Evaluating: ADD
+Executing DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ M = read(Mpath)
+ K = sum( M )
+ print(K)
+ N = read('/scratch/N_01100_sparse_tall.mtx')
+ print(sum(N))
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if (K > 0.0) {
+       start = utils::time(1)
+   }
+   R = M + N
+   if (K > 0.0) {
+       tmp = utils::printRandElements(R, 10)
+   }
+   if (K > 0.0) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+        
+# EXPLAIN (RUNTIME):
+# Memory Budget local/remote = 20389MB/20180MB/24216MB/4238MB
+# Degree of Parallelism (vcores) local/remote = 24/21
+PROGRAM ( size CP/SP = 85/11 )
+--FUNCTIONS
+----FUNCTION CALL GRAPH
+------MAIN PROGRAM
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::time
+----FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements [recompile=true]
+------GENERIC (lines 0-0) [recompile=true]
+--------CP createvar _mVar0 scratch_space//_p29636_10.11.10.10//_t0/temp0 true MATRIX binaryblock 125000000 100 1000 1000 -1 copy
+--------SPARK chkpoint M.MATRIX.DOUBLE _mVar0.MATRIX.DOUBLE MEMORY_AND_DISK
+--------CP rmvar M
+--------CP cpvar _mVar0 M
+--------CP rmvar _mVar0
+------FOR (lines 0-0)
+--------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+--------CP assignvar 10.SCALAR.INT.true __pred.SCALAR.INT
+--------GENERIC (lines 24-30) [recompile=true]
+----------CP createvar _mVar1 scratch_space//_p29636_10.11.10.10//_t0/temp1 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 125000000 1.0 -1 uniform 1.0 24 _mVar1.MATRIX.DOUBLE
+----------CP castdts _mVar1.MATRIX.DOUBLE.false _Var2.SCALAR.DOUBLE
+----------CP rmvar _mVar1
+----------CP castvti _Var2.SCALAR.DOUBLE.false _Var3.SCALAR.INT
+----------CP rmvar _Var2
+----------CP createvar _mVar4 scratch_space//_p29636_10.11.10.10//_t0/temp2 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 100 1.0 -1 uniform 1.0 24 _mVar4.MATRIX.DOUBLE
+----------CP castdts _mVar4.MATRIX.DOUBLE.false _Var5.SCALAR.DOUBLE
+----------CP rmvar _mVar4
+----------CP castvti _Var5.SCALAR.DOUBLE.false _Var6.SCALAR.INT
+----------CP rmvar _Var5
+----------CP createvar _mVar7 scratch_space//_p29636_10.11.10.10//_t0/temp3 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+----------SPARK rightIndex M.MATRIX.DOUBLE _Var3.SCALAR.INT.false _Var3.SCALAR.INT.false _Var6.SCALAR.INT.false _Var6.SCALAR.INT.false _mVar7.MATRIX.DOUBLE MULTI_BLOCK
+----------CP rmvar _Var3 _Var6
+----------CP castdts _mVar7.MATRIX.DOUBLE.false _Var8.SCALAR.STRING
+----------CP rmvar _mVar7
+----------CP print _Var8.SCALAR.STRING.false _Var9.SCALAR.STRING
+----------CP rmvar _Var8 _Var9
+----EXTERNAL FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::time
+--MAIN PROGRAM
+----GENERIC (lines 1-11) [recompile=false]
+------CP createvar pREADM /scratch/M_01100_sparse_tall.mtx false MATRIX matrixmarket 125000000 100 -1 -1 124376342 copy
+------CP createvar pREADN /scratch/N_01100_sparse_tall.mtx false MATRIX matrixmarket 125000000 100 -1 -1 124376342 copy
+------CP createvar _mVar10 scratch_space//_p29636_10.11.10.10//_t0/temp4 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK rblk pREADM.MATRIX.DOUBLE _mVar10.MATRIX.DOUBLE 1000 1000 true
+------CP createvar _mVar11 scratch_space//_p29636_10.11.10.10//_t0/temp5 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint _mVar10.MATRIX.DOUBLE _mVar11.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar _mVar10
+------CP createvar _mVar12 scratch_space//_p29636_10.11.10.10//_t0/temp6 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+------SPARK uak+ _mVar11.MATRIX.DOUBLE _mVar12.MATRIX.DOUBLE SINGLE_BLOCK
+------CP castdts _mVar12.MATRIX.DOUBLE.false _Var13.SCALAR.DOUBLE
+------CP rmvar _mVar12
+------CP createvar _mVar14 scratch_space//_p29636_10.11.10.10//_t0/temp7 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK rblk pREADN.MATRIX.DOUBLE _mVar14.MATRIX.DOUBLE 1000 1000 true
+------CP createvar _mVar15 scratch_space//_p29636_10.11.10.10//_t0/temp8 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint _mVar14.MATRIX.DOUBLE _mVar15.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar _mVar14
+------CP createvar _mVar16 scratch_space//_p29636_10.11.10.10//_t0/temp9 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+------SPARK uak+ _mVar15.MATRIX.DOUBLE _mVar16.MATRIX.STRING SINGLE_BLOCK
+------CP castdts _mVar16.MATRIX.STRING.false _Var17.SCALAR.STRING
+------CP rmvar _mVar16
+------CP createvar _mVar18 scratch_space//_p29636_10.11.10.10//_t0/temp10 true MATRIX binaryblock 5 1 1000 1000 0 copy
+------CP rand 5.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 0.0 0.0 1.0 -1 uniform 1.0 24 _mVar18.MATRIX.DOUBLE
+------CP print _Var13.SCALAR.DOUBLE.false _Var19.SCALAR.STRING
+------CP print _Var17.SCALAR.STRING.false _Var20.SCALAR.STRING
+------CP rmvar _Var17
+------CP mvvar _Var13 K
+------CP cpvar _mVar11 M
+------CP rmvar _Var19
+------CP cpvar _mVar15 N
+------CP rmvar _Var20
+------CP cpvar _mVar18 times
+------CP rmvar _mVar11 _mVar15 _mVar18
+----GENERIC (lines 0-0) [recompile=false]
+------CP createvar _mVar21 scratch_space//_p29636_10.11.10.10//_t0/temp11 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint M.MATRIX.DOUBLE _mVar21.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP createvar _mVar22 scratch_space//_p29636_10.11.10.10//_t0/temp12 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint N.MATRIX.DOUBLE _mVar22.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar M N
+------CP cpvar _mVar21 M
+------CP cpvar _mVar22 N
+------CP rmvar _mVar21 _mVar22
+----FOR (lines 0-0) [in-place=[times]]
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 5.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------IF (lines 13-15)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var23.SCALAR.BOOLEAN
+--------CP mvvar _Var23 __pred
+--------GENERIC (lines 14-14) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true start
+------GENERIC (lines 16-16) [recompile=true]
+--------CP createvar _mVar24 scratch_space//_p29636_10.11.10.10//_t0/temp13 true MATRIX binaryblock 125000000 100 1000 1000 -1 copy
+--------SPARK + M.MATRIX.DOUBLE N.MATRIX.DOUBLE _mVar24.MATRIX.DOUBLE
+--------CP cpvar _mVar24 R
+--------CP rmvar _mVar24
+------IF (lines 17-19)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var25.SCALAR.BOOLEAN
+--------CP mvvar _Var25 __pred
+--------GENERIC (lines 18-18) [recompile=true]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml printRandElements 2 1 R.MATRIX.DOUBLE 10.SCALAR.INT.true tmp
+----------CP rmvar R
+------IF (lines 20-22)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var26.SCALAR.BOOLEAN
+--------CP mvvar _Var26 __pred
+--------GENERIC (lines 21-21) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true stop
+------GENERIC (lines 23-23) [recompile=false]
+--------CP - stop.SCALAR.DOUBLE.false start.SCALAR.DOUBLE.false _Var27.SCALAR.DOUBLE
+--------CP / _Var27.SCALAR.DOUBLE.false 1000.SCALAR.INT.true _Var28.SCALAR.DOUBLE
+--------CP rmvar _Var27
+--------CP createvar _mVar29 scratch_space//_p29636_10.11.10.10//_t0/temp14 true MATRIX binaryblock 5 1 1000 1000 -1 copy
+--------CP leftIndex times.MATRIX.DOUBLE _Var28.SCALAR.DOUBLE.false ix.SCALAR.INT.false ix.SCALAR.INT.false 1.SCALAR.INT.true 1.SCALAR.INT.true _mVar29.MATRIX.DOUBLE
+--------CP rmvar _Var28 times
+--------CP cpvar _mVar29 times
+--------CP rmvar _mVar29
+----GENERIC (lines 25-27) [recompile=false]
+------CP createvar _mVar30 scratch_space//_p29636_10.11.10.10//_t0/temp15 true MATRIX binaryblock 1 5 1000 1000 -1 copy
+------CP r' times.MATRIX.DOUBLE _mVar30.MATRIX.DOUBLE 24
+------CP rmvar times
+------CP cpvar _mVar30 times
+------CP rmvar _mVar30 times
+
+1.868777818927162E8
+1.868777818927162E8
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+0.0
+SystemML Statistics:
+Total execution time:		304.139 sec.
+Number of executed Spark inst:	68.
+
+101 125000001
+101 125000001
+79006638
+
+Welcome to Apache SystemML!
+
+Evaluating: GMM
+Executing DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ M = read(Mpath)
+ K = sum( M )
+ print(K)
+ N = read('/scratch/M_01100_sparse_tall.mtx')
+ print(sum(N))
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if (K > 0.0) {
+       start = utils::time(1)
+   }
+   R = M %*% N
+   if (K > 0.0) {
+       tmp = utils::printRandElements(R, 10)
+   }
+   if (K > 0.0) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+        
+# EXPLAIN (RUNTIME):
+# Memory Budget local/remote = 20389MB/70630MB/84756MB/4238MB
+# Degree of Parallelism (vcores) local/remote = 24/27
+PROGRAM ( size CP/SP = 76/6 )
+--FUNCTIONS
+----FUNCTION CALL GRAPH
+------MAIN PROGRAM
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements
+--------/home/ubuntu/SLAB/lib/dml/utils.dml::time
+----FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::printRandElements [recompile=false]
+------GENERIC (lines 0-0) [recompile=false]
+------FOR (lines 0-0)
+--------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+--------CP assignvar 10.SCALAR.INT.true __pred.SCALAR.INT
+--------GENERIC (lines 24-30) [recompile=false]
+----------CP createvar _mVar0 scratch_space//_p32290_10.11.10.10//_t0/temp0 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 100 1.0 -1 uniform 1.0 24 _mVar0.MATRIX.DOUBLE
+----------CP castdts _mVar0.MATRIX.DOUBLE.false _Var1.SCALAR.DOUBLE
+----------CP rmvar _mVar0
+----------CP castvti _Var1.SCALAR.DOUBLE.false _Var2.SCALAR.INT
+----------CP rmvar _Var1
+----------CP createvar _mVar3 scratch_space//_p32290_10.11.10.10//_t0/temp1 true MATRIX binaryblock 1 1 1000 1000 1 copy
+----------CP rand 1.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 1 100 1.0 -1 uniform 1.0 24 _mVar3.MATRIX.DOUBLE
+----------CP castdts _mVar3.MATRIX.DOUBLE.false _Var4.SCALAR.DOUBLE
+----------CP rmvar _mVar3
+----------CP castvti _Var4.SCALAR.DOUBLE.false _Var5.SCALAR.INT
+----------CP rmvar _Var4
+----------CP createvar _mVar6 scratch_space//_p32290_10.11.10.10//_t0/temp2 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+----------CP rightIndex M.MATRIX.DOUBLE _Var2.SCALAR.INT.false _Var2.SCALAR.INT.false _Var5.SCALAR.INT.false _Var5.SCALAR.INT.false _mVar6.MATRIX.DOUBLE
+----------CP rmvar _Var2 _Var5
+----------CP castdts _mVar6.MATRIX.DOUBLE.false _Var7.SCALAR.STRING
+----------CP rmvar _mVar6
+----------CP print _Var7.SCALAR.STRING.false _Var8.SCALAR.STRING
+----------CP rmvar _Var7 _Var8
+----EXTERNAL FUNCTION /home/ubuntu/SLAB/lib/dml/utils.dml::time
+--MAIN PROGRAM
+----GENERIC (lines 1-11) [recompile=false]
+------CP createvar pREADM /scratch/M_01100_sparse_wide.mtx false MATRIX matrixmarket 100 125000000 -1 -1 124377929 copy
+------CP createvar pREADN /scratch/M_01100_sparse_tall.mtx false MATRIX matrixmarket 125000000 100 -1 -1 124376342 copy
+------CP createvar _mVar9 scratch_space//_p32290_10.11.10.10//_t0/temp3 true MATRIX binaryblock 100 125000000 1000 1000 124377929 copy
+------SPARK rblk pREADM.MATRIX.DOUBLE _mVar9.MATRIX.DOUBLE 1000 1000 true
+------CP uak+ _mVar9.MATRIX.DOUBLE _Var10.SCALAR.DOUBLE 24
+------CP createvar _mVar11 scratch_space//_p32290_10.11.10.10//_t0/temp4 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK rblk pREADN.MATRIX.DOUBLE _mVar11.MATRIX.DOUBLE 1000 1000 true
+------CP createvar _mVar12 scratch_space//_p32290_10.11.10.10//_t0/temp5 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint _mVar11.MATRIX.DOUBLE _mVar12.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar _mVar11
+------CP createvar _mVar13 scratch_space//_p32290_10.11.10.10//_t0/temp6 true MATRIX binaryblock 1 1 1000 1000 -1 copy
+------SPARK uak+ _mVar12.MATRIX.DOUBLE _mVar13.MATRIX.STRING SINGLE_BLOCK
+------CP castdts _mVar13.MATRIX.STRING.false _Var14.SCALAR.STRING
+------CP rmvar _mVar13
+------CP createvar _mVar15 scratch_space//_p32290_10.11.10.10//_t0/temp7 true MATRIX binaryblock 5 1 1000 1000 0 copy
+------CP rand 5.SCALAR.INT.true 1.SCALAR.INT.true 1000 1000 0.0 0.0 1.0 -1 uniform 1.0 24 _mVar15.MATRIX.DOUBLE
+------CP print _Var10.SCALAR.DOUBLE.false _Var16.SCALAR.STRING
+------CP print _Var14.SCALAR.STRING.false _Var17.SCALAR.STRING
+------CP rmvar _Var14
+------CP mvvar _Var10 K
+------CP cpvar _mVar9 M
+------CP rmvar _Var16
+------CP cpvar _mVar12 N
+------CP rmvar _Var17
+------CP cpvar _mVar15 times
+------CP rmvar _mVar9 _mVar12 _mVar15
+----GENERIC (lines 0-0) [recompile=false]
+------CP createvar _mVar18 scratch_space//_p32290_10.11.10.10//_t0/temp8 true MATRIX binaryblock 125000000 100 1000 1000 124376342 copy
+------SPARK chkpoint N.MATRIX.DOUBLE _mVar18.MATRIX.DOUBLE MEMORY_AND_DISK
+------CP rmvar N
+------CP cpvar _mVar18 N
+------CP rmvar _mVar18
+----FOR (lines 0-0) [in-place=[times]]
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 5.SCALAR.INT.true __pred.SCALAR.INT
+------CP assignvar 1.SCALAR.INT.true __pred.SCALAR.INT
+------IF (lines 13-15)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var19.SCALAR.BOOLEAN
+--------CP mvvar _Var19 __pred
+--------GENERIC (lines 14-14) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true start
+------GENERIC (lines 16-16) [recompile=true]
+--------CP createvar _mVar20 scratch_space//_p32290_10.11.10.10//_t0/temp9 true MATRIX binaryblock 100 100 1000 1000 -1 copy
+--------SPARK mapmm M.MATRIX.DOUBLE N.MATRIX.DOUBLE _mVar20.MATRIX.DOUBLE LEFT true SINGLE_BLOCK
+--------CP cpvar _mVar20 R
+--------CP rmvar _mVar20
+------IF (lines 17-19)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var21.SCALAR.BOOLEAN
+--------CP mvvar _Var21 __pred
+--------GENERIC (lines 18-18) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml printRandElements 2 1 R.MATRIX.DOUBLE 10.SCALAR.INT.true tmp
+----------CP rmvar R
+------IF (lines 20-22)
+--------CP > K.SCALAR.DOUBLE.false 0.0.SCALAR.DOUBLE.true _Var22.SCALAR.BOOLEAN
+--------CP mvvar _Var22 __pred
+--------GENERIC (lines 21-21) [recompile=false]
+----------CP extfunct /home/ubuntu/SLAB/lib/dml/utils.dml time 1 1 1.SCALAR.INT.true stop
+------GENERIC (lines 23-23) [recompile=false]
+--------CP - stop.SCALAR.DOUBLE.false start.SCALAR.DOUBLE.false _Var23.SCALAR.DOUBLE
+--------CP / _Var23.SCALAR.DOUBLE.false 1000.SCALAR.INT.true _Var24.SCALAR.DOUBLE
+--------CP rmvar _Var23
+--------CP createvar _mVar25 scratch_space//_p32290_10.11.10.10//_t0/temp10 true MATRIX binaryblock 5 1 1000 1000 -1 copy
+--------CP leftIndex times.MATRIX.DOUBLE _Var24.SCALAR.DOUBLE.false ix.SCALAR.INT.false ix.SCALAR.INT.false 1.SCALAR.INT.true 1.SCALAR.INT.true _mVar25.MATRIX.DOUBLE
+--------CP rmvar _Var24 times
+--------CP cpvar _mVar25 times
+--------CP rmvar _mVar25
+----GENERIC (lines 25-27) [recompile=false]
+------CP createvar _mVar26 scratch_space//_p32290_10.11.10.10//_t0/temp11 true MATRIX binaryblock 1 5 1000 1000 -1 copy
+------CP r' times.MATRIX.DOUBLE _mVar26.MATRIX.DOUBLE 24
+------CP rmvar times
+------CP cpvar _mVar26 times
+------CP rmvar _mVar26 times
+
+6.249529754895571E7
+1.868777818927162E8
+3167.2655166852082
+3086.525627460488
+3110.819410871107
+3098.3125179663884
+3109.499439731205
+3084.280372243747
+3182.465467728413
+3141.2194367461575
+3147.9188281832608
+3160.771841044576
+3127.3410397467237
+3121.0671254623812
+3162.063745260729
+3112.840780222677
+3132.094358172425
+3108.7619489405906
+3118.054392975829
+3149.076303835591
+3084.1040482344147
+3104.9987223600597
+3109.8205782798946
+3157.6861146346578
+3089.577126635109
+3173.339938981875
+3149.723886483004
+3152.139708666569
+3114.5554356121806
+3093.408433419051
+3127.6754620846987
+3113.4308840750314
+3071.2160203266467
+3125.5806844662943
+3144.5037440640917
+3134.0379108529123
+3132.015165019634
+3126.707005875973
+3149.6329923881203
+3075.690321615578
+3113.138538532466
+3176.531385158469
+3104.4201042128348
+3089.8867459487246
+3139.956893289448
+3106.6203831492785
+3113.8810535288026
+3207.077551768557
+3144.428696558141
+3077.956496087874
+3099.6053651389766
+3106.7720192179845
+SystemML Statistics:
+Total execution time:		198.273 sec.
+Number of executed Spark inst:	10.
+
+ut/scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps 
+
+
+
+
+  
+./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps 
+
+
+
+
+  
+./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps 
+
+
+
+
+  
+./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_01100_sparse_wide.mtx Npath=/scratch/M_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_wide.mtx tableStub=_01100_sparse_wide nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SystemMLMatrixOps   ./systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_01100_sparse_wide.mtx Npath=/scratch/M_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_wide.mtx tableStub=_01100_sparse_wide nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+125000001 101
+101 125000001
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_01100_sparse_wide.mtx Npath=/scratch/M_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_wide.mtx tableStub=_01100_sparse_wide nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_01100_sparse_wide.mtx Npath=/scratch/M_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_wide.mtx tableStub=_01100_sparse_wide nodes=4 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_nodes
+Cleared: ../temp
+Cleared: ../external
+
+Start log file:  ../output/make.log
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: python _node_scaling_tests.py 4 "01" "SYSTEMML MLLIB" "TRANS MVM NORM TSM ADD GMM" 100
+
+End log file:  ../output/make.log

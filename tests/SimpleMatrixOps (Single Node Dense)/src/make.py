@@ -91,14 +91,19 @@ if test_type == 'matrix-ops':
         if 'MADLIB' in systems:
             utils.run_python(program='madlib_matrix_ops.py',
                              cmd_args=cmd_args)
+        if 'SCIDB' in systems:
+            utils.run_python(program='scidb_matrix_ops.py',
+                             cmd_args=cmd_args)
 
 if test_type == 'cpu':
-    ops = ['TSM','ADD'] 
+#    ops = ['TSM','ADD'] 
+    ops = ['TSM']
     nproc = [1,2,4,8,16]
-    for op in ops:
-        for num_proc in nproc:
+    for num_proc in nproc:
+        for op in ops:
             # This will force the process to execute only on a subset of processors
             utils.set_nproc(num_proc)
+            os.putenv('OMP_NUM_THREADS','{}'.format(num_proc))
             args = (op, mattype, nrows)
             cmd_args = cmd_args_template.format(*args)
             cmd_args += ' fixedAxis=100 step=10 nproc={}'.format(num_proc)
@@ -110,19 +115,22 @@ if test_type == 'cpu':
             if 'R' in systems:
                 utils.run_R(program='R_matrix_ops.R', cmd_args=cmd_args)
             if 'SYSTEMML' in systems:
-                 utils.run_spark(program='SystemMLMatrixOps', 
-                                 sbt_dir='./systemml',
-                                 driver_cores=str(num_proc),
-                                 cmd_args=cmd_args)
+                utils.run_spark(program='SystemMLMatrixOps', 
+                                sbt_dir='./systemml',
+                                driver_cores=str(num_proc),
+                                cmd_args=cmd_args)
             if 'MLLIB' in systems:
-                 utils.run_spark(program='MLLibMatrixOps', 
-                                 sbt_dir='./mllib',
-                                 driver_cores=str(num_proc),
-                                 cmd_args=cmd_args)
+                utils.run_spark(program='MLLibMatrixOps', 
+                                sbt_dir='./mllib',
+                                driver_cores=str(num_proc),
+                                cmd_args=cmd_args)
             utils.set_nproc(999)
             if 'MADLIB' in systems:
-                 utils.run_python(program='madlib_matrix_ops.py',
-                                  cmd_args=cmd_args)
+                utils.run_python(program='madlib_matrix_ops.py',
+                                cmd_args=cmd_args)
+            if 'SCIDB' in systems:
+                utils.run_python(program='scidb_matrix_ops.py',
+                                cmd_args=cmd_args)
 
 remove_dir('scratch_space')
 

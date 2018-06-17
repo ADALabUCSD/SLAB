@@ -1,2 +1,0 @@
-nodes,time1,time2,time3,time4,time5
-8,3.2165E-5,1.161E-6,7.16E-7,6.02E-7,5.94E-7

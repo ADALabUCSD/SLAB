@@ -1,5 +1,5 @@
 
- make.py started: 2018-01-30 18:48:37 /home/ubuntu/benchmark/tests/Pipelines (Distributed Dense)/src 
+ make.py started: 2018-05-17 03:35:11 /home/ubuntu/SLAB/tests/Pipelines (Distributed Dense)/src 
 
 
 name := "SystemMLPipelines"
@@ -72,6 +72,17 @@ Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
 ./mllib/src/main/scala/spark_matrix_ops.scala
 ================================================================================
+// Copyright 2018 Anthony H Thomas and Arun Kumar
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import scala.math._
 import java.nio.file.{Paths, Files}
 import org.apache.spark.SparkContext
@@ -151,4 +162,4 @@ CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
 
- make.py ended: 2018-01-30 19:32:02
+ make.py ended: 2018-05-17 04:06:26

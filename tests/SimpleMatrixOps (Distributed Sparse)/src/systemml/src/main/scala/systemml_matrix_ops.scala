@@ -28,6 +28,9 @@ object SystemMLMatrixOps extends App {
         val ml = new MLContext(sc)
         val root = sys.env("BENCHMARK_PROJECT_ROOT")
 
+        ml.setExplain(true)
+        ml.setExplainLevel(MLContext.ExplainLevel.RUNTIME)
+
         val argMap = Map[String,String](
                 args.map(_.split("=")).map({
                     case Array(x,y) => (x -> y)

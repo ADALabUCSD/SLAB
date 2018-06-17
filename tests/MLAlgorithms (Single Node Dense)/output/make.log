@@ -1,12 +1,27 @@
 
- make.py started: 2018-01-31 05:23:23 /home/ubuntu/benchmark/tests/MLAlgorithms (Single Node Dense)/src 
+ make.py started: 2018-06-11 06:32:00 /home/ubuntu/SLAB/tests/MLAlgorithms (Single Node Dense)/src 
 
+
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 with open(__file__) as fh: print fh.read()
 import os
 import sys
+import time
+import atexit
+import scidbpy
+import subprocess
+
 import numpy as np
-import numpy.linalg as alg
 import pandas as pd
 
 ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
@@ -15,768 +30,323 @@ if (ROOT is None):
     raise StandardError(msg)
 
 sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
 import np_timing_utils as utils
 
 def main(kwargs):
     mattype = kwargs['mattype']
-    opType = kwargs['opType']
+    op_type = kwargs['opType']
     nrow = int(kwargs['nrow'])
     ncol = int(kwargs['ncol'])
     nproc = int(kwargs['nproc'])
 
-    path = '../output/np_{}.txt'.format(opType)
+    path = '../output/scidb_{}.txt'.format(op_type)
     colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(nproc, debug=True)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
+    print cxn.iquery("list('instances')", fetch=True)
 
     env = {
-        'logit_reg': logit_reg,
+        'cxn': cxn, 
         'reg': reg,
+        'logit': logit,
         'gnmf': gnmf,
         'robust_se': robust_se
     }
-    X = np.random.rand(nrow, ncol)
-    y = np.random.rand(nrow,1).ravel() if opType != 'gnmf' else None
 
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2)
-        call = 'robust_se(X, eps)'
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')        
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
+
+    run_times.loc[:,'nproc'] = nproc
+    run_times.loc[:,1:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
+
+    P.terminate()
+    stdout.close()
+    stderr.close()
+
+def init_scidb(nproc, debug=False):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
+
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
+
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
     else:
-        raise StandardError('Invalid Operation')
+        stdout = open('scidb.out', 'w')
+        stderr = open('scidb.err', 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(nproc-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-def logit_reg(X, y, iterations=3):
-    N,K = X.shape
-    w = np.random.rand(K,1).ravel()
+    # materialize the inner produce matrix
+    s = time.time()
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(X=X_table_name, Z=zname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    print 'COMPUTE XTX: {}s'.format(time.time() - s)
+    
+    # compute the inverse of XTX
+    s = time.time()
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+    print 'COMPUTE INVERSE: {}s'.format(time.time() - s)
+
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    s = time.time()
+    stmt = """
+        consume(gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z}))
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    print 'COMPUTE PROJECTION: {}s'.format(time.time() - s)
+    cxn.iquery(stmt)
+
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
+
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
     iteration = 0
-    step_size = 0.001
-
     while iteration < iterations:
-        xb = X.dot(w)
-        delta = y - (1/1+np.exp(-xb))
-        step_size /= 2
-        w = w + step_size*(X.T.dot(delta)/float(N))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
         iteration += 1
 
-    return w
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-def gnmf(X, r, iterations=3):
-    N,K = X.shape
-    W = np.random.rand(N, r)
-    H = np.random.rand(r, K)
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
+
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
+
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
+
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
+
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
+
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
+
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb:true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb:true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
+
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa:true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa:true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
 
     iteration = 0
     while iteration < iterations:
-        W = W*((X.dot(H.T))/(W.dot(H.dot(H.T))))
-        H = H*((W.T.dot(X))/((W.T.dot(W).dot(H))))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
         iteration += 1
 
-    return W,H
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
 
-def reg(X,y):
-    return alg.solve(X.T.dot(X), X.T.dot(y))
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
 
-def robust_se(X, r2):
-    S = X.T*r2
-    XTX_INV = alg.inv(X.T.dot(X))
-    return XTX_INV.dot(S.dot(X)).dot(XTX_INV)
+def matrix_diag(N, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn)):
+        cxn.iquery("remove('{}')".format(name))
+    if (overwrite is False) and (name in dir(cxn)):
+        return
+    stmt = """
+        store(filter(
+            build(<val:double>[row=0:{N}:0:{cz};col=0:{N}:0:{cz}], 
+                 iif(row=col, (RANDOM() % 100) / 10.0, 0)), 
+                 val <> 0), {name})
+    """.format(N=N, cz=chunksize, name=name)
+    print stmt
+    cxn.iquery(stmt)  
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
 
 if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
 
-Running: taskset -c 0-23 python _np_algs.py opType=reg mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
+Running: taskset -c 0-23 python _scidb_algs.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=1
 
 CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 with open(__file__) as fh: print fh.read()
 import os
 import sys
+import time
+import atexit
+import scidbpy
+import subprocess
+
 import numpy as np
-import numpy.linalg as alg
-import pandas as pd
-import tensorflow as tf
-
-ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
-if (ROOT is None):
-    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
-    raise StandardError(msg)
-
-sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
-import np_timing_utils as utils
-
-def main(kwargs):
-    mattype = kwargs['mattype']
-    opType = kwargs['opType']
-    nrow = int(kwargs['nrow'])
-    ncol = int(kwargs['ncol'])
-    nproc = int(kwargs['nproc'])
-
-    path = '../output/tf_{}.txt'.format(opType)
-    colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
-
-    env = {
-        'np': np, 'tf': tf,
-        'logit_reg': logit_reg,
-        'reg': reg,
-        'gnmf': gnmf,
-        'robust_se': robust_se
-    }
-    X = np.random.rand(nrow, ncol).astype(np.float32)
-    if opType != 'gnmf':
-        y = (np.random.rand(nrow,1) >= 0.80).astype(np.int64)
-    else:
-        y = None
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2).ravel()
-        call = 'robust_se(X, eps)'
-    else:
-        raise StandardError('Invalid Operation')
-
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
-
-def logit_reg(Xdata, ydata, iterations=3):
-    def doLogitIter(w, stepSize, iteration):
-        iteration += 1
-        xb = tf.matmul(X,w)
-        delta = tf.subtract(1/(1+tf.exp(-xb)),y)
-        stepSize /= float(4.0)
-        w = w - stepSize*(tf.matmul(Xt, delta)/N)
-        return (w, stepSize, iteration)
-
-    G = tf.Graph()
-    with G.as_default():
-        N = Xdata.shape[0]
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
-
-        Xt = tf.transpose(X)
-        w = tf.Variable(tf.zeros(shape=(Xdata.shape[1],1)))
-        stepSize = 10.0
-        iteration = tf.constant(0)
-
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doLogitIter, (w, stepSize, iteration))
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X: Xdata, y: ydata})
-
-    return res[0]
-
-def gnmf(Xdata, r, iterations=3):
-    def doGNMFIter(W, H, iteration):
-        W = tf.multiply(W, tf.div(tf.matmul(X, H, transpose_b=True),
-                        tf.matmul(W, tf.matmul(H, H, transpose_b=True))))
-        H = tf.multiply(H, tf.div(tf.matmul(W, X, transpose_a=True),
-                        tf.matmul(tf.matmul(W, W, transpose_a=True), H)))
-        iteration += 1
-        return (W, H, iteration)
-
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-
-        W = tf.Variable(tf.random_uniform((Xdata.shape[0],r)))
-        H = tf.Variable(tf.random_uniform((r, Xdata.shape[1])))
-        iteration = tf.constant(0)
-
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doGNMFIter, (W,H,iteration))
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X : Xdata})
-
-    return (res[0], res[1])
-
-def reg(Xdata, ydata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
-
-        b = tf.matrix_solve(
-                tf.matmul(X, X, transpose_a=True),
-                tf.matmul(X, y, transpose_a=True)
-            )
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(b, feed_dict={X: Xdata, y: ydata})
-
-    return res
-
-def robust_se(Xdata, epsdata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        eps = tf.placeholder(tf.float32, shape=epsdata.shape)
-        S = tf.transpose( X )*eps
-        XTX_INV = tf.matrix_inverse(tf.matmul(X,X,transpose_a=True))
-        VAR = tf.matmul(
-            tf.matmul(XTX_INV, tf.matmul(S,X)), XTX_INV)
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(VAR, feed_dict={X: Xdata, eps: epsdata})
-
-    return res
-
-if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
-
-
-Running: taskset -c 0-23 python _tf_algorithms.py opType=reg mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-
-main <- function(argv) {
-    mattype <- argList[['mattype']]
-    opType <- argList[['opType']]
-    nrow <- as.numeric(argList[['nrow']])
-    ncol <- as.numeric(argList[['ncol']])
-    nproc <- as.numeric(argList[['nproc']])
-    path <- paste('../output/R_', opType, '.txt', sep='')
-
-    colnames <- c('nproc','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    X <- allocMatrix(nrow, ncol)
-    print(dim(X))
-    if (opType != 'gnmf') {
-        y <- allocMatrix(nrow, 1, TRUE)
-    }
-    if (opType == 'logit') {
-        call <- 'logitReg(X,y)'
-    } else if (opType == 'reg') {
-        call <- 'reg(X,y)'
-    } else if (opType == 'gnmf') {
-        call <- 'gnmf(X,10)'
-    } else if (opType == 'robust') {
-        b <- reg(X,y)
-        y_hat <- X %*% b
-        eps <- as.vector(y_hat^2)
-        print(length(eps))
-        call <- 'robust_se(X,eps)'
-    }
-
-    runTimes[1,'nproc'] <- nproc
-    runTimes[1,2:ncol(runTimes)] <- timeOp(call)
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-allocMatrix <- function(rows, cols, binary=FALSE) {
-    if (binary) {
-        M <- as.numeric(matrix(runif(rows*cols), nrow=rows, ncol=cols) >= .80)
-    } else {
-        M <- matrix(rnorm(rows*cols), nrow=rows, ncol=cols)
-    }
-    return(M)
-}
-
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
-    w <- allocMatrix(ncol(X),1)
-    iteration <- 1
-    stepSize <- 10
-
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
-
-        iteration <- iteration+1
-    }
-
-    return(w)
-}
-
-gnmf <- function(X, r, iterations=3) {
-    W <- allocMatrix(nrow(X), r)
-    H <- allocMatrix(r, ncol(X))
-
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
-    }
-
-    return(list(W,H))
-}
-
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
-
-robust_se <- function(X, r2) {
-    S <- sweep(t(X), MARGIN=2, STATS=r2, FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-main()
-
-Running: taskset -c 0-23 Rscript ml_algs.R opType=reg mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-./systemml/src/main/scala/systemml_ml_algorithms.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.sysml.api.mlcontext._
-import org.apache.sysml.api.mlcontext.ScriptFactory._
-import org.apache.sysml.api.mlcontext.MatrixFormat._
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import scala.io.Source
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.collection.immutable._
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.{linalg => malg}
-import org.apache.spark.mllib.linalg.distributed._
-
-object SystemMLMLAlgorithms extends App {
-
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val ml = new MLContext(sc)
-        val spark = SparkSession.builder.getOrCreate()
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
-
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow")
-        val ncol = argMap("ncol")
-        val nproc = argMap("nproc")
-
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"systemml_${opType}.txt"
-        val path = root + stub + base
-        if (!File(path).exists) {
-            File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
-
-        val call = opType match {
-            case "logit"  => "logit(X, y, 10)"
-            case "gnmf"   => "gnmf(X, 10, 10)"
-            case "reg"    => "reg(X, y)"
-            case "robust" => "robust_se(X, r2)"
-            case "pca"    => "pca(X, 5)"
-            case _        => ""
-        }
-
-        val alloc_y_string = opType match {
-            case "gnmf"  => "rand(rows=1, cols=1)"
-            case _ => s"rand(rows=${nrow}, cols=1, pdf='uniform')"
-        }
-
-        val print_op = opType match {
-           case "gnmf" => ""
-           case _      => "res = utils::printRandElements(tmp, 10)"
-        }
-
-        val preprocess_string = opType match {
-            case "robust" => 
-                """
-                | b = reg(X,y)
-                | y_hat = X %*% b
-                | r2 = (y - y_hat)^2
-                """.stripMargin
-            case _        => ""
-        }
-
-        val libDir = root + "/lib/dml"
-        val dmlText =
-          s"""
-            | setwd('${libDir}')
-            | source('utils.dml') as utils
-            |
-            | X = rand(rows=${nrow}, cols=${ncol})
-            | rvect = ${alloc_y_string}
-            | y = rvect > 0.80
-            | p = sum( X )
-            | q = sum( y )
-            | print(p)
-            | print(q)
-            |
-            | ${preprocess_string}
-            |
-            | times = matrix(0.0, rows = 5, cols = 1)
-            | for (ix in 1:5) {
-            |   if ((p != 0) | (q != 0)) {
-            |       start = utils::time(1)
-            |   }
-            |   tmp = ${call}
-            |   ${print_op}
-            |   if ((p != 0) | (q != 0)) {
-            |       stop = utils::time(1)
-            |   }
-            |   times[ix,1] = (stop - start) / 1000
-            | }
-            | times = t(times)
-            |
-            | logit = function(matrix[double] X, 
-            |                  matrix[double] y, 
-            |                  Integer iterations)
-            |     return (matrix[double] w) {
-            |
-            |     N = nrow(X)
-            |     w = matrix(0, rows=ncol(X), cols=1)
-            |     iteration = 0
-            |     stepSize = 10
-            |
-            |     while (iteration < iterations) {
-            |         xb = X %*% w
-            |         delta = 1/(1+exp(-xb)) - y
-            |         stepSize = stepSize / 2
-            |         w = w - ((stepSize * t(X) %*% delta)/N)
-            |
-            |         iteration = iteration+1
-            |     }
-            | }
-            |
-            | gnmf = function(matrix[double] X, Integer r, Integer iterations)
-            |     return (integer iteration) {
-            |     W = rand(rows = nrow(X), cols = r, pdf = 'uniform')
-            |     H = rand(rows = r, cols = ncol(X), pdf = 'uniform')
-            |
-            |     for (i in 1:3) {
-            |         W = W * ((X %*% t(H)) / (W %*% (H %*% t(H))))
-            |         H = H * ((t(W) %*% X) / ((t(W) %*% W) %*% H))
-            |     }
-            |     if ((as.scalar(W[1,1]) >  0) & (as.scalar(H[1,1]) > 0)) {
-            |         print(as.scalar(H[1,1]))
-            |         print(as.scalar(W[1,1]))
-            |     }
-            |
-            |     iteration = 0
-            | }
-            |
-            | reg = function(matrix[double] X, matrix[double] y)
-            |     return (matrix[double] b) {
-            |     b = solve(t(X) %*% X, t(X) %*% y)
-            | }
-            |
-            | robust_se = function(matrix[double] X, 
-            |                      matrix[double] r2) 
-            |     return (matrix[double] se) {
-            |     # NOTE: SVD is cheap since XTX is small!
-            |     [U,H,V] = svd( t(X) %*% X )
-            |     h = diag( H )
-            |     XTX_INV = U %*% diag(h^-1) %*% t(V)
-            |     S = diag( r2 )
-            |     se = XTX_INV %*% (t(X) %*% S %*% X) %*% XTX_INV
-            | }
-            |            
-            | pca = function(matrix[double] X, Integer k) 
-            |   return (matrix[double] PRJ) {
-            |     N = nrow( X )
-            |     K = ncol( X )
-            |     XS = X - colMeans( X )
-            |     S = (1/(N-1))*(t( XS ) %*% XS)
-            |     [eigvals, eigvects] = eigen( S )
-            |     
-            |     # Thanks to the Sysml implementation for this helpful bit 
-            |     # of code to sort the eigenvectors
-            |
-            |     eigssorted = order(target=eigvals,by=1, 
-            |                        decreasing=TRUE,
-            |                        index.return=TRUE)
-            |     diagmat = table(seq(1,K), eigssorted)
-            |     eigvals = diagmat %*% eigvals
-            |     eigvects = eigvects %*% diagmat
-            |     eigvects = eigvects[,1:k]
-            |
-            |     PRJ = XS %*% eigvects
-            | }
-        """.stripMargin
-        println("Running DML: ")
-        println(dmlText)
-        val script = dml(dmlText).out("times")
-        val res = ml.execute(script)
-        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
-
-        File(path).appendAll(
-            nproc + "," + results(0).mkString(",") + '\n')
-    }
-}
-
-Running: taskset -c 0-23 spark-submit --class SystemMLMLAlgorithms  --driver-cores 24   ./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar opType=reg mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-./mllib/src/main/scala/spark_ml_algs.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.rdd._
-import breeze.linalg.*
-import breeze.{math => bMath,
-               numerics => bNum,
-               linalg => bAlg}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.random.RandomRDDs._
-import org.apache.spark.mllib.linalg.distributed._
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.io.Source
-import java.util.Random
-
-object SparkMLAlgorithms {
-    def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val spark = SparkSession.builder.getOrCreate()
-
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
-
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow").toInt
-        val ncol = argMap("ncol").toInt
-        val nproc = argMap("nproc").toInt
-
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"mllib_${opType}.txt"
-        val path = root + stub + base
-
-        if (!Files.exists(Paths.get(path))) {
-          File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
-
-        val x = as_dense( Matrices.rand(nrow, ncol, new Random()) )
-        val y = opType match {
-            case "gnmf" => vectorize( Matrices.rand(1, 1, new Random()) )
-            case _ => vectorize( Matrices.rand(nrow, 1, new Random()) )
-        }
-
-        val r2 = opType match {
-            case "robust" => compute_r2(x, y)
-            case _ => vectorize( Matrices.rand(1, 1, new Random()) )
-        }
-
-        val times = Array[Double](0,0,0,0,0)
-        for (ix <- 0 to 4) {
-            println(s"Test: ${ix}")
-            val start = System.nanoTime()
-
-            if (opType == "logit")
-                logit(x, y, 3)
-            if (opType == "gnmf")
-                gnmf(x, 10, 3)
-            if (opType == "reg")
-                reg(x, y)
-            if (opType == "robust")
-                robust_se(x, r2)
-
-            val stop = System.nanoTime()
-            times(ix) = (stop - start)/1e9
-        }
-
-        File(path).appendAll(
-            nproc + "," + times.mkString(",") + "\n")
-    }
-
-    def compute_r2(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        val b = reg(X, y)
-        val y_hat = X.multiply(b)
-        val eps = as_breeze( y ) - as_breeze( y_hat )
-        return from_breeze(eps:^2.0)
-    }
-
-    def logit(X: DenseMatrix, y: DenseVector, max_iter: Int) : DenseVector = {
-        val N = X.numRows
-        val K = X.numCols
-
-        var w = vectorize( Matrices.rand(K, 1, new Random()) )
-        var iteration = 0
-        val stepSize = 0.001
-
-        while (iteration < max_iter) {
-            val xb = X.multiply(w)
-            val eps = from_breeze(
-                as_breeze( y ) - bNum.sigmoid( as_breeze( xb )))
-            val delta = as_breeze(
-                X.transpose.multiply(eps)):*(stepSize/N.toDouble)
-            w = from_breeze( as_breeze( w ) - delta )
-            iteration = iteration + 1
-        }
-
-        return w
-    }
-
-    def reg(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        return as_dense(from_breeze((as_breeze( X.transpose.multiply(X) ).
-                    asInstanceOf[bDenseMatrix[Double]] \ 
-                as_breeze( X.transpose.multiply(y) ).
-                    asInstanceOf[bDenseVector[Double]])))
-    }
-
-    def gnmf(X: DenseMatrix, r: Int, iterations: Int) : 
-        (DenseMatrix, DenseMatrix) = {
-        val N = X.numRows
-        val K = X.numCols
-        var W = as_dense(Matrices.rand(N, r, new Random()))
-        var H = as_dense(Matrices.rand(r, K, new Random()))
-
-        var iteration = 0
-        while (iteration < iterations) {
-            W = from_breeze( 
-                as_breeze(W) :* (
-                    as_breeze(X.multiply(H.transpose)) :/
-                    as_breeze(W.multiply(H.multiply(H.transpose))) )
-            )
-            H = from_breeze(
-                as_breeze(H) :* (
-                    as_breeze(W.transpose.multiply(X)) :/
-                    as_breeze(W.transpose.multiply(W).multiply(H))
-                )
-            )
-            iteration = iteration + 1
-        }
-        return (W,H)
-    }
-
-    def robust_se(X: DenseMatrix, eps: DenseVector) : DenseMatrix = {
-        val XTX_INV = from_breeze(bAlg.inv(as_breeze(X.transpose.multiply(X))))
-        val XBT = as_breeze( X.transpose )
-        val S = XBT(*,::)*as_breeze(eps)
-        val VAR = XTX_INV.multiply(from_breeze(S).
-                                   multiply(X).
-                                   multiply(XTX_INV))
-        return VAR
-    }
-
-    def as_breeze(v: linalg.DenseVector) : bDenseVector[Double] = {
-        return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bDenseVector[Double]) : linalg.DenseVector = {
-        return as_dense(Vectors.dense(v.data))
-    }
-
-    def as_breeze(m: linalg.DenseMatrix) : bDenseMatrix[Double] = {
-        return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-    }
-
-    def from_breeze(m: bDenseMatrix[Double]) : linalg.DenseMatrix = {
-        return as_dense(Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data))
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense( M.toArray ) )
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    }
-}
-
-Running: taskset -c 0-23 spark-submit --class SparkMLAlgorithms  --driver-cores 24   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=reg mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-with open(__file__) as fh: print fh.read()
-import os
-import sys
-import numpy as np
-import numpy.linalg as alg
 import pandas as pd
 
 ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
@@ -785,768 +355,323 @@ if (ROOT is None):
     raise StandardError(msg)
 
 sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
 import np_timing_utils as utils
 
 def main(kwargs):
     mattype = kwargs['mattype']
-    opType = kwargs['opType']
+    op_type = kwargs['opType']
     nrow = int(kwargs['nrow'])
     ncol = int(kwargs['ncol'])
     nproc = int(kwargs['nproc'])
 
-    path = '../output/np_{}.txt'.format(opType)
+    path = '../output/scidb_{}.txt'.format(op_type)
     colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(nproc, debug=True)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
+    print cxn.iquery("list('instances')", fetch=True)
 
     env = {
-        'logit_reg': logit_reg,
+        'cxn': cxn, 
         'reg': reg,
+        'logit': logit,
         'gnmf': gnmf,
         'robust_se': robust_se
     }
-    X = np.random.rand(nrow, ncol)
-    y = np.random.rand(nrow,1).ravel() if opType != 'gnmf' else None
 
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2)
-        call = 'robust_se(X, eps)'
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')        
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
+
+    run_times.loc[:,'nproc'] = nproc
+    run_times.loc[:,1:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
+
+    P.terminate()
+    stdout.close()
+    stderr.close()
+
+def init_scidb(nproc, debug=False):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
+
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
+
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
     else:
-        raise StandardError('Invalid Operation')
+        stdout = open('scidb.out', 'w')
+        stderr = open('scidb.err', 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(nproc-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-def logit_reg(X, y, iterations=3):
-    N,K = X.shape
-    w = np.random.rand(K,1).ravel()
+    # materialize the inner produce matrix
+    s = time.time()
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(X=X_table_name, Z=zname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    print 'COMPUTE XTX: {}s'.format(time.time() - s)
+    
+    # compute the inverse of XTX
+    s = time.time()
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+    print 'COMPUTE INVERSE: {}s'.format(time.time() - s)
+
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    s = time.time()
+    stmt = """
+        consume(gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z}))
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    print 'COMPUTE PROJECTION: {}s'.format(time.time() - s)
+    cxn.iquery(stmt)
+
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
+
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
     iteration = 0
-    step_size = 0.001
-
     while iteration < iterations:
-        xb = X.dot(w)
-        delta = y - (1/1+np.exp(-xb))
-        step_size /= 2
-        w = w + step_size*(X.T.dot(delta)/float(N))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
         iteration += 1
 
-    return w
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-def gnmf(X, r, iterations=3):
-    N,K = X.shape
-    W = np.random.rand(N, r)
-    H = np.random.rand(r, K)
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
+
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
+
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
+
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
+
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
+
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
+
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb:true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb:true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
+
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa:true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa:true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
 
     iteration = 0
     while iteration < iterations:
-        W = W*((X.dot(H.T))/(W.dot(H.dot(H.T))))
-        H = H*((W.T.dot(X))/((W.T.dot(W).dot(H))))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
         iteration += 1
 
-    return W,H
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
 
-def reg(X,y):
-    return alg.solve(X.T.dot(X), X.T.dot(y))
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
 
-def robust_se(X, r2):
-    S = X.T*r2
-    XTX_INV = alg.inv(X.T.dot(X))
-    return XTX_INV.dot(S.dot(X)).dot(XTX_INV)
+def matrix_diag(N, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn)):
+        cxn.iquery("remove('{}')".format(name))
+    if (overwrite is False) and (name in dir(cxn)):
+        return
+    stmt = """
+        store(filter(
+            build(<val:double>[row=0:{N}:0:{cz};col=0:{N}:0:{cz}], 
+                 iif(row=col, (RANDOM() % 100) / 10.0, 0)), 
+                 val <> 0), {name})
+    """.format(N=N, cz=chunksize, name=name)
+    print stmt
+    cxn.iquery(stmt)  
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
 
 if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
 
-Running: taskset -c 0-23 python _np_algs.py opType=logit mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
+Running: taskset -c 0-23 python _scidb_algs.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=2
 
 CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 with open(__file__) as fh: print fh.read()
 import os
 import sys
+import time
+import atexit
+import scidbpy
+import subprocess
+
 import numpy as np
-import numpy.linalg as alg
-import pandas as pd
-import tensorflow as tf
-
-ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
-if (ROOT is None):
-    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
-    raise StandardError(msg)
-
-sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
-import np_timing_utils as utils
-
-def main(kwargs):
-    mattype = kwargs['mattype']
-    opType = kwargs['opType']
-    nrow = int(kwargs['nrow'])
-    ncol = int(kwargs['ncol'])
-    nproc = int(kwargs['nproc'])
-
-    path = '../output/tf_{}.txt'.format(opType)
-    colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
-
-    env = {
-        'np': np, 'tf': tf,
-        'logit_reg': logit_reg,
-        'reg': reg,
-        'gnmf': gnmf,
-        'robust_se': robust_se
-    }
-    X = np.random.rand(nrow, ncol).astype(np.float32)
-    if opType != 'gnmf':
-        y = (np.random.rand(nrow,1) >= 0.80).astype(np.int64)
-    else:
-        y = None
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2).ravel()
-        call = 'robust_se(X, eps)'
-    else:
-        raise StandardError('Invalid Operation')
-
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
-
-def logit_reg(Xdata, ydata, iterations=3):
-    def doLogitIter(w, stepSize, iteration):
-        iteration += 1
-        xb = tf.matmul(X,w)
-        delta = tf.subtract(1/(1+tf.exp(-xb)),y)
-        stepSize /= float(4.0)
-        w = w - stepSize*(tf.matmul(Xt, delta)/N)
-        return (w, stepSize, iteration)
-
-    G = tf.Graph()
-    with G.as_default():
-        N = Xdata.shape[0]
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
-
-        Xt = tf.transpose(X)
-        w = tf.Variable(tf.zeros(shape=(Xdata.shape[1],1)))
-        stepSize = 10.0
-        iteration = tf.constant(0)
-
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doLogitIter, (w, stepSize, iteration))
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X: Xdata, y: ydata})
-
-    return res[0]
-
-def gnmf(Xdata, r, iterations=3):
-    def doGNMFIter(W, H, iteration):
-        W = tf.multiply(W, tf.div(tf.matmul(X, H, transpose_b=True),
-                        tf.matmul(W, tf.matmul(H, H, transpose_b=True))))
-        H = tf.multiply(H, tf.div(tf.matmul(W, X, transpose_a=True),
-                        tf.matmul(tf.matmul(W, W, transpose_a=True), H)))
-        iteration += 1
-        return (W, H, iteration)
-
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-
-        W = tf.Variable(tf.random_uniform((Xdata.shape[0],r)))
-        H = tf.Variable(tf.random_uniform((r, Xdata.shape[1])))
-        iteration = tf.constant(0)
-
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doGNMFIter, (W,H,iteration))
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X : Xdata})
-
-    return (res[0], res[1])
-
-def reg(Xdata, ydata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
-
-        b = tf.matrix_solve(
-                tf.matmul(X, X, transpose_a=True),
-                tf.matmul(X, y, transpose_a=True)
-            )
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(b, feed_dict={X: Xdata, y: ydata})
-
-    return res
-
-def robust_se(Xdata, epsdata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        eps = tf.placeholder(tf.float32, shape=epsdata.shape)
-        S = tf.transpose( X )*eps
-        XTX_INV = tf.matrix_inverse(tf.matmul(X,X,transpose_a=True))
-        VAR = tf.matmul(
-            tf.matmul(XTX_INV, tf.matmul(S,X)), XTX_INV)
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(VAR, feed_dict={X: Xdata, eps: epsdata})
-
-    return res
-
-if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
-
-
-Running: taskset -c 0-23 python _tf_algorithms.py opType=logit mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-
-main <- function(argv) {
-    mattype <- argList[['mattype']]
-    opType <- argList[['opType']]
-    nrow <- as.numeric(argList[['nrow']])
-    ncol <- as.numeric(argList[['ncol']])
-    nproc <- as.numeric(argList[['nproc']])
-    path <- paste('../output/R_', opType, '.txt', sep='')
-
-    colnames <- c('nproc','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    X <- allocMatrix(nrow, ncol)
-    print(dim(X))
-    if (opType != 'gnmf') {
-        y <- allocMatrix(nrow, 1, TRUE)
-    }
-    if (opType == 'logit') {
-        call <- 'logitReg(X,y)'
-    } else if (opType == 'reg') {
-        call <- 'reg(X,y)'
-    } else if (opType == 'gnmf') {
-        call <- 'gnmf(X,10)'
-    } else if (opType == 'robust') {
-        b <- reg(X,y)
-        y_hat <- X %*% b
-        eps <- as.vector(y_hat^2)
-        print(length(eps))
-        call <- 'robust_se(X,eps)'
-    }
-
-    runTimes[1,'nproc'] <- nproc
-    runTimes[1,2:ncol(runTimes)] <- timeOp(call)
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-allocMatrix <- function(rows, cols, binary=FALSE) {
-    if (binary) {
-        M <- as.numeric(matrix(runif(rows*cols), nrow=rows, ncol=cols) >= .80)
-    } else {
-        M <- matrix(rnorm(rows*cols), nrow=rows, ncol=cols)
-    }
-    return(M)
-}
-
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
-    w <- allocMatrix(ncol(X),1)
-    iteration <- 1
-    stepSize <- 10
-
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
-
-        iteration <- iteration+1
-    }
-
-    return(w)
-}
-
-gnmf <- function(X, r, iterations=3) {
-    W <- allocMatrix(nrow(X), r)
-    H <- allocMatrix(r, ncol(X))
-
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
-    }
-
-    return(list(W,H))
-}
-
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
-
-robust_se <- function(X, r2) {
-    S <- sweep(t(X), MARGIN=2, STATS=r2, FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-main()
-
-Running: taskset -c 0-23 Rscript ml_algs.R opType=logit mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-./systemml/src/main/scala/systemml_ml_algorithms.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.sysml.api.mlcontext._
-import org.apache.sysml.api.mlcontext.ScriptFactory._
-import org.apache.sysml.api.mlcontext.MatrixFormat._
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import scala.io.Source
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.collection.immutable._
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.{linalg => malg}
-import org.apache.spark.mllib.linalg.distributed._
-
-object SystemMLMLAlgorithms extends App {
-
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val ml = new MLContext(sc)
-        val spark = SparkSession.builder.getOrCreate()
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
-
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow")
-        val ncol = argMap("ncol")
-        val nproc = argMap("nproc")
-
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"systemml_${opType}.txt"
-        val path = root + stub + base
-        if (!File(path).exists) {
-            File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
-
-        val call = opType match {
-            case "logit"  => "logit(X, y, 10)"
-            case "gnmf"   => "gnmf(X, 10, 10)"
-            case "reg"    => "reg(X, y)"
-            case "robust" => "robust_se(X, r2)"
-            case "pca"    => "pca(X, 5)"
-            case _        => ""
-        }
-
-        val alloc_y_string = opType match {
-            case "gnmf"  => "rand(rows=1, cols=1)"
-            case _ => s"rand(rows=${nrow}, cols=1, pdf='uniform')"
-        }
-
-        val print_op = opType match {
-           case "gnmf" => ""
-           case _      => "res = utils::printRandElements(tmp, 10)"
-        }
-
-        val preprocess_string = opType match {
-            case "robust" => 
-                """
-                | b = reg(X,y)
-                | y_hat = X %*% b
-                | r2 = (y - y_hat)^2
-                """.stripMargin
-            case _        => ""
-        }
-
-        val libDir = root + "/lib/dml"
-        val dmlText =
-          s"""
-            | setwd('${libDir}')
-            | source('utils.dml') as utils
-            |
-            | X = rand(rows=${nrow}, cols=${ncol})
-            | rvect = ${alloc_y_string}
-            | y = rvect > 0.80
-            | p = sum( X )
-            | q = sum( y )
-            | print(p)
-            | print(q)
-            |
-            | ${preprocess_string}
-            |
-            | times = matrix(0.0, rows = 5, cols = 1)
-            | for (ix in 1:5) {
-            |   if ((p != 0) | (q != 0)) {
-            |       start = utils::time(1)
-            |   }
-            |   tmp = ${call}
-            |   ${print_op}
-            |   if ((p != 0) | (q != 0)) {
-            |       stop = utils::time(1)
-            |   }
-            |   times[ix,1] = (stop - start) / 1000
-            | }
-            | times = t(times)
-            |
-            | logit = function(matrix[double] X, 
-            |                  matrix[double] y, 
-            |                  Integer iterations)
-            |     return (matrix[double] w) {
-            |
-            |     N = nrow(X)
-            |     w = matrix(0, rows=ncol(X), cols=1)
-            |     iteration = 0
-            |     stepSize = 10
-            |
-            |     while (iteration < iterations) {
-            |         xb = X %*% w
-            |         delta = 1/(1+exp(-xb)) - y
-            |         stepSize = stepSize / 2
-            |         w = w - ((stepSize * t(X) %*% delta)/N)
-            |
-            |         iteration = iteration+1
-            |     }
-            | }
-            |
-            | gnmf = function(matrix[double] X, Integer r, Integer iterations)
-            |     return (integer iteration) {
-            |     W = rand(rows = nrow(X), cols = r, pdf = 'uniform')
-            |     H = rand(rows = r, cols = ncol(X), pdf = 'uniform')
-            |
-            |     for (i in 1:3) {
-            |         W = W * ((X %*% t(H)) / (W %*% (H %*% t(H))))
-            |         H = H * ((t(W) %*% X) / ((t(W) %*% W) %*% H))
-            |     }
-            |     if ((as.scalar(W[1,1]) >  0) & (as.scalar(H[1,1]) > 0)) {
-            |         print(as.scalar(H[1,1]))
-            |         print(as.scalar(W[1,1]))
-            |     }
-            |
-            |     iteration = 0
-            | }
-            |
-            | reg = function(matrix[double] X, matrix[double] y)
-            |     return (matrix[double] b) {
-            |     b = solve(t(X) %*% X, t(X) %*% y)
-            | }
-            |
-            | robust_se = function(matrix[double] X, 
-            |                      matrix[double] r2) 
-            |     return (matrix[double] se) {
-            |     # NOTE: SVD is cheap since XTX is small!
-            |     [U,H,V] = svd( t(X) %*% X )
-            |     h = diag( H )
-            |     XTX_INV = U %*% diag(h^-1) %*% t(V)
-            |     S = diag( r2 )
-            |     se = XTX_INV %*% (t(X) %*% S %*% X) %*% XTX_INV
-            | }
-            |            
-            | pca = function(matrix[double] X, Integer k) 
-            |   return (matrix[double] PRJ) {
-            |     N = nrow( X )
-            |     K = ncol( X )
-            |     XS = X - colMeans( X )
-            |     S = (1/(N-1))*(t( XS ) %*% XS)
-            |     [eigvals, eigvects] = eigen( S )
-            |     
-            |     # Thanks to the Sysml implementation for this helpful bit 
-            |     # of code to sort the eigenvectors
-            |
-            |     eigssorted = order(target=eigvals,by=1, 
-            |                        decreasing=TRUE,
-            |                        index.return=TRUE)
-            |     diagmat = table(seq(1,K), eigssorted)
-            |     eigvals = diagmat %*% eigvals
-            |     eigvects = eigvects %*% diagmat
-            |     eigvects = eigvects[,1:k]
-            |
-            |     PRJ = XS %*% eigvects
-            | }
-        """.stripMargin
-        println("Running DML: ")
-        println(dmlText)
-        val script = dml(dmlText).out("times")
-        val res = ml.execute(script)
-        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
-
-        File(path).appendAll(
-            nproc + "," + results(0).mkString(",") + '\n')
-    }
-}
-
-Running: taskset -c 0-23 spark-submit --class SystemMLMLAlgorithms  --driver-cores 24   ./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar opType=logit mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-./mllib/src/main/scala/spark_ml_algs.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.rdd._
-import breeze.linalg.*
-import breeze.{math => bMath,
-               numerics => bNum,
-               linalg => bAlg}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.random.RandomRDDs._
-import org.apache.spark.mllib.linalg.distributed._
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.io.Source
-import java.util.Random
-
-object SparkMLAlgorithms {
-    def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val spark = SparkSession.builder.getOrCreate()
-
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
-
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow").toInt
-        val ncol = argMap("ncol").toInt
-        val nproc = argMap("nproc").toInt
-
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"mllib_${opType}.txt"
-        val path = root + stub + base
-
-        if (!Files.exists(Paths.get(path))) {
-          File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
-
-        val x = as_dense( Matrices.rand(nrow, ncol, new Random()) )
-        val y = opType match {
-            case "gnmf" => vectorize( Matrices.rand(1, 1, new Random()) )
-            case _ => vectorize( Matrices.rand(nrow, 1, new Random()) )
-        }
-
-        val r2 = opType match {
-            case "robust" => compute_r2(x, y)
-            case _ => vectorize( Matrices.rand(1, 1, new Random()) )
-        }
-
-        val times = Array[Double](0,0,0,0,0)
-        for (ix <- 0 to 4) {
-            println(s"Test: ${ix}")
-            val start = System.nanoTime()
-
-            if (opType == "logit")
-                logit(x, y, 3)
-            if (opType == "gnmf")
-                gnmf(x, 10, 3)
-            if (opType == "reg")
-                reg(x, y)
-            if (opType == "robust")
-                robust_se(x, r2)
-
-            val stop = System.nanoTime()
-            times(ix) = (stop - start)/1e9
-        }
-
-        File(path).appendAll(
-            nproc + "," + times.mkString(",") + "\n")
-    }
-
-    def compute_r2(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        val b = reg(X, y)
-        val y_hat = X.multiply(b)
-        val eps = as_breeze( y ) - as_breeze( y_hat )
-        return from_breeze(eps:^2.0)
-    }
-
-    def logit(X: DenseMatrix, y: DenseVector, max_iter: Int) : DenseVector = {
-        val N = X.numRows
-        val K = X.numCols
-
-        var w = vectorize( Matrices.rand(K, 1, new Random()) )
-        var iteration = 0
-        val stepSize = 0.001
-
-        while (iteration < max_iter) {
-            val xb = X.multiply(w)
-            val eps = from_breeze(
-                as_breeze( y ) - bNum.sigmoid( as_breeze( xb )))
-            val delta = as_breeze(
-                X.transpose.multiply(eps)):*(stepSize/N.toDouble)
-            w = from_breeze( as_breeze( w ) - delta )
-            iteration = iteration + 1
-        }
-
-        return w
-    }
-
-    def reg(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        return as_dense(from_breeze((as_breeze( X.transpose.multiply(X) ).
-                    asInstanceOf[bDenseMatrix[Double]] \ 
-                as_breeze( X.transpose.multiply(y) ).
-                    asInstanceOf[bDenseVector[Double]])))
-    }
-
-    def gnmf(X: DenseMatrix, r: Int, iterations: Int) : 
-        (DenseMatrix, DenseMatrix) = {
-        val N = X.numRows
-        val K = X.numCols
-        var W = as_dense(Matrices.rand(N, r, new Random()))
-        var H = as_dense(Matrices.rand(r, K, new Random()))
-
-        var iteration = 0
-        while (iteration < iterations) {
-            W = from_breeze( 
-                as_breeze(W) :* (
-                    as_breeze(X.multiply(H.transpose)) :/
-                    as_breeze(W.multiply(H.multiply(H.transpose))) )
-            )
-            H = from_breeze(
-                as_breeze(H) :* (
-                    as_breeze(W.transpose.multiply(X)) :/
-                    as_breeze(W.transpose.multiply(W).multiply(H))
-                )
-            )
-            iteration = iteration + 1
-        }
-        return (W,H)
-    }
-
-    def robust_se(X: DenseMatrix, eps: DenseVector) : DenseMatrix = {
-        val XTX_INV = from_breeze(bAlg.inv(as_breeze(X.transpose.multiply(X))))
-        val XBT = as_breeze( X.transpose )
-        val S = XBT(*,::)*as_breeze(eps)
-        val VAR = XTX_INV.multiply(from_breeze(S).
-                                   multiply(X).
-                                   multiply(XTX_INV))
-        return VAR
-    }
-
-    def as_breeze(v: linalg.DenseVector) : bDenseVector[Double] = {
-        return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bDenseVector[Double]) : linalg.DenseVector = {
-        return as_dense(Vectors.dense(v.data))
-    }
-
-    def as_breeze(m: linalg.DenseMatrix) : bDenseMatrix[Double] = {
-        return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-    }
-
-    def from_breeze(m: bDenseMatrix[Double]) : linalg.DenseMatrix = {
-        return as_dense(Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data))
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense( M.toArray ) )
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    }
-}
-
-Running: taskset -c 0-23 spark-submit --class SparkMLAlgorithms  --driver-cores 24   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=logit mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-with open(__file__) as fh: print fh.read()
-import os
-import sys
-import numpy as np
-import numpy.linalg as alg
 import pandas as pd
 
 ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
@@ -1555,768 +680,323 @@ if (ROOT is None):
     raise StandardError(msg)
 
 sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
 import np_timing_utils as utils
 
 def main(kwargs):
     mattype = kwargs['mattype']
-    opType = kwargs['opType']
+    op_type = kwargs['opType']
     nrow = int(kwargs['nrow'])
     ncol = int(kwargs['ncol'])
     nproc = int(kwargs['nproc'])
 
-    path = '../output/np_{}.txt'.format(opType)
+    path = '../output/scidb_{}.txt'.format(op_type)
     colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(nproc, debug=True)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
+    print cxn.iquery("list('instances')", fetch=True)
 
     env = {
-        'logit_reg': logit_reg,
+        'cxn': cxn, 
         'reg': reg,
+        'logit': logit,
         'gnmf': gnmf,
         'robust_se': robust_se
     }
-    X = np.random.rand(nrow, ncol)
-    y = np.random.rand(nrow,1).ravel() if opType != 'gnmf' else None
 
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2)
-        call = 'robust_se(X, eps)'
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')        
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
+
+    run_times.loc[:,'nproc'] = nproc
+    run_times.loc[:,1:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
+
+    P.terminate()
+    stdout.close()
+    stderr.close()
+
+def init_scidb(nproc, debug=False):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
+
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
+
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
     else:
-        raise StandardError('Invalid Operation')
+        stdout = open('scidb.out', 'w')
+        stderr = open('scidb.err', 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(nproc-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-def logit_reg(X, y, iterations=3):
-    N,K = X.shape
-    w = np.random.rand(K,1).ravel()
+    # materialize the inner produce matrix
+    s = time.time()
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(X=X_table_name, Z=zname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    print 'COMPUTE XTX: {}s'.format(time.time() - s)
+    
+    # compute the inverse of XTX
+    s = time.time()
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+    print 'COMPUTE INVERSE: {}s'.format(time.time() - s)
+
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    s = time.time()
+    stmt = """
+        consume(gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z}))
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    print 'COMPUTE PROJECTION: {}s'.format(time.time() - s)
+    cxn.iquery(stmt)
+
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
+
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
     iteration = 0
-    step_size = 0.001
-
     while iteration < iterations:
-        xb = X.dot(w)
-        delta = y - (1/1+np.exp(-xb))
-        step_size /= 2
-        w = w + step_size*(X.T.dot(delta)/float(N))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
         iteration += 1
 
-    return w
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-def gnmf(X, r, iterations=3):
-    N,K = X.shape
-    W = np.random.rand(N, r)
-    H = np.random.rand(r, K)
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
+
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
+
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
+
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
+
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
+
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
+
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb:true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb:true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
+
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa:true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa:true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
 
     iteration = 0
     while iteration < iterations:
-        W = W*((X.dot(H.T))/(W.dot(H.dot(H.T))))
-        H = H*((W.T.dot(X))/((W.T.dot(W).dot(H))))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
         iteration += 1
 
-    return W,H
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
 
-def reg(X,y):
-    return alg.solve(X.T.dot(X), X.T.dot(y))
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
 
-def robust_se(X, r2):
-    S = X.T*r2
-    XTX_INV = alg.inv(X.T.dot(X))
-    return XTX_INV.dot(S.dot(X)).dot(XTX_INV)
+def matrix_diag(N, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn)):
+        cxn.iquery("remove('{}')".format(name))
+    if (overwrite is False) and (name in dir(cxn)):
+        return
+    stmt = """
+        store(filter(
+            build(<val:double>[row=0:{N}:0:{cz};col=0:{N}:0:{cz}], 
+                 iif(row=col, (RANDOM() % 100) / 10.0, 0)), 
+                 val <> 0), {name})
+    """.format(N=N, cz=chunksize, name=name)
+    print stmt
+    cxn.iquery(stmt)  
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
 
 if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
 
-Running: taskset -c 0-23 python _np_algs.py opType=gnmf mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
+Running: taskset -c 0-23 python _scidb_algs.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=4
 
 CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 with open(__file__) as fh: print fh.read()
 import os
 import sys
+import time
+import atexit
+import scidbpy
+import subprocess
+
 import numpy as np
-import numpy.linalg as alg
-import pandas as pd
-import tensorflow as tf
-
-ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
-if (ROOT is None):
-    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
-    raise StandardError(msg)
-
-sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
-import np_timing_utils as utils
-
-def main(kwargs):
-    mattype = kwargs['mattype']
-    opType = kwargs['opType']
-    nrow = int(kwargs['nrow'])
-    ncol = int(kwargs['ncol'])
-    nproc = int(kwargs['nproc'])
-
-    path = '../output/tf_{}.txt'.format(opType)
-    colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
-
-    env = {
-        'np': np, 'tf': tf,
-        'logit_reg': logit_reg,
-        'reg': reg,
-        'gnmf': gnmf,
-        'robust_se': robust_se
-    }
-    X = np.random.rand(nrow, ncol).astype(np.float32)
-    if opType != 'gnmf':
-        y = (np.random.rand(nrow,1) >= 0.80).astype(np.int64)
-    else:
-        y = None
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2).ravel()
-        call = 'robust_se(X, eps)'
-    else:
-        raise StandardError('Invalid Operation')
-
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
-
-def logit_reg(Xdata, ydata, iterations=3):
-    def doLogitIter(w, stepSize, iteration):
-        iteration += 1
-        xb = tf.matmul(X,w)
-        delta = tf.subtract(1/(1+tf.exp(-xb)),y)
-        stepSize /= float(4.0)
-        w = w - stepSize*(tf.matmul(Xt, delta)/N)
-        return (w, stepSize, iteration)
-
-    G = tf.Graph()
-    with G.as_default():
-        N = Xdata.shape[0]
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
-
-        Xt = tf.transpose(X)
-        w = tf.Variable(tf.zeros(shape=(Xdata.shape[1],1)))
-        stepSize = 10.0
-        iteration = tf.constant(0)
-
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doLogitIter, (w, stepSize, iteration))
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X: Xdata, y: ydata})
-
-    return res[0]
-
-def gnmf(Xdata, r, iterations=3):
-    def doGNMFIter(W, H, iteration):
-        W = tf.multiply(W, tf.div(tf.matmul(X, H, transpose_b=True),
-                        tf.matmul(W, tf.matmul(H, H, transpose_b=True))))
-        H = tf.multiply(H, tf.div(tf.matmul(W, X, transpose_a=True),
-                        tf.matmul(tf.matmul(W, W, transpose_a=True), H)))
-        iteration += 1
-        return (W, H, iteration)
-
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-
-        W = tf.Variable(tf.random_uniform((Xdata.shape[0],r)))
-        H = tf.Variable(tf.random_uniform((r, Xdata.shape[1])))
-        iteration = tf.constant(0)
-
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doGNMFIter, (W,H,iteration))
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X : Xdata})
-
-    return (res[0], res[1])
-
-def reg(Xdata, ydata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
-
-        b = tf.matrix_solve(
-                tf.matmul(X, X, transpose_a=True),
-                tf.matmul(X, y, transpose_a=True)
-            )
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(b, feed_dict={X: Xdata, y: ydata})
-
-    return res
-
-def robust_se(Xdata, epsdata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        eps = tf.placeholder(tf.float32, shape=epsdata.shape)
-        S = tf.transpose( X )*eps
-        XTX_INV = tf.matrix_inverse(tf.matmul(X,X,transpose_a=True))
-        VAR = tf.matmul(
-            tf.matmul(XTX_INV, tf.matmul(S,X)), XTX_INV)
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(VAR, feed_dict={X: Xdata, eps: epsdata})
-
-    return res
-
-if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
-
-
-Running: taskset -c 0-23 python _tf_algorithms.py opType=gnmf mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-
-main <- function(argv) {
-    mattype <- argList[['mattype']]
-    opType <- argList[['opType']]
-    nrow <- as.numeric(argList[['nrow']])
-    ncol <- as.numeric(argList[['ncol']])
-    nproc <- as.numeric(argList[['nproc']])
-    path <- paste('../output/R_', opType, '.txt', sep='')
-
-    colnames <- c('nproc','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    X <- allocMatrix(nrow, ncol)
-    print(dim(X))
-    if (opType != 'gnmf') {
-        y <- allocMatrix(nrow, 1, TRUE)
-    }
-    if (opType == 'logit') {
-        call <- 'logitReg(X,y)'
-    } else if (opType == 'reg') {
-        call <- 'reg(X,y)'
-    } else if (opType == 'gnmf') {
-        call <- 'gnmf(X,10)'
-    } else if (opType == 'robust') {
-        b <- reg(X,y)
-        y_hat <- X %*% b
-        eps <- as.vector(y_hat^2)
-        print(length(eps))
-        call <- 'robust_se(X,eps)'
-    }
-
-    runTimes[1,'nproc'] <- nproc
-    runTimes[1,2:ncol(runTimes)] <- timeOp(call)
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-allocMatrix <- function(rows, cols, binary=FALSE) {
-    if (binary) {
-        M <- as.numeric(matrix(runif(rows*cols), nrow=rows, ncol=cols) >= .80)
-    } else {
-        M <- matrix(rnorm(rows*cols), nrow=rows, ncol=cols)
-    }
-    return(M)
-}
-
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
-    w <- allocMatrix(ncol(X),1)
-    iteration <- 1
-    stepSize <- 10
-
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
-
-        iteration <- iteration+1
-    }
-
-    return(w)
-}
-
-gnmf <- function(X, r, iterations=3) {
-    W <- allocMatrix(nrow(X), r)
-    H <- allocMatrix(r, ncol(X))
-
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
-    }
-
-    return(list(W,H))
-}
-
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
-
-robust_se <- function(X, r2) {
-    S <- sweep(t(X), MARGIN=2, STATS=r2, FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-main()
-
-Running: taskset -c 0-23 Rscript ml_algs.R opType=gnmf mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-./systemml/src/main/scala/systemml_ml_algorithms.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.sysml.api.mlcontext._
-import org.apache.sysml.api.mlcontext.ScriptFactory._
-import org.apache.sysml.api.mlcontext.MatrixFormat._
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import scala.io.Source
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.collection.immutable._
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.{linalg => malg}
-import org.apache.spark.mllib.linalg.distributed._
-
-object SystemMLMLAlgorithms extends App {
-
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val ml = new MLContext(sc)
-        val spark = SparkSession.builder.getOrCreate()
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
-
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow")
-        val ncol = argMap("ncol")
-        val nproc = argMap("nproc")
-
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"systemml_${opType}.txt"
-        val path = root + stub + base
-        if (!File(path).exists) {
-            File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
-
-        val call = opType match {
-            case "logit"  => "logit(X, y, 10)"
-            case "gnmf"   => "gnmf(X, 10, 10)"
-            case "reg"    => "reg(X, y)"
-            case "robust" => "robust_se(X, r2)"
-            case "pca"    => "pca(X, 5)"
-            case _        => ""
-        }
-
-        val alloc_y_string = opType match {
-            case "gnmf"  => "rand(rows=1, cols=1)"
-            case _ => s"rand(rows=${nrow}, cols=1, pdf='uniform')"
-        }
-
-        val print_op = opType match {
-           case "gnmf" => ""
-           case _      => "res = utils::printRandElements(tmp, 10)"
-        }
-
-        val preprocess_string = opType match {
-            case "robust" => 
-                """
-                | b = reg(X,y)
-                | y_hat = X %*% b
-                | r2 = (y - y_hat)^2
-                """.stripMargin
-            case _        => ""
-        }
-
-        val libDir = root + "/lib/dml"
-        val dmlText =
-          s"""
-            | setwd('${libDir}')
-            | source('utils.dml') as utils
-            |
-            | X = rand(rows=${nrow}, cols=${ncol})
-            | rvect = ${alloc_y_string}
-            | y = rvect > 0.80
-            | p = sum( X )
-            | q = sum( y )
-            | print(p)
-            | print(q)
-            |
-            | ${preprocess_string}
-            |
-            | times = matrix(0.0, rows = 5, cols = 1)
-            | for (ix in 1:5) {
-            |   if ((p != 0) | (q != 0)) {
-            |       start = utils::time(1)
-            |   }
-            |   tmp = ${call}
-            |   ${print_op}
-            |   if ((p != 0) | (q != 0)) {
-            |       stop = utils::time(1)
-            |   }
-            |   times[ix,1] = (stop - start) / 1000
-            | }
-            | times = t(times)
-            |
-            | logit = function(matrix[double] X, 
-            |                  matrix[double] y, 
-            |                  Integer iterations)
-            |     return (matrix[double] w) {
-            |
-            |     N = nrow(X)
-            |     w = matrix(0, rows=ncol(X), cols=1)
-            |     iteration = 0
-            |     stepSize = 10
-            |
-            |     while (iteration < iterations) {
-            |         xb = X %*% w
-            |         delta = 1/(1+exp(-xb)) - y
-            |         stepSize = stepSize / 2
-            |         w = w - ((stepSize * t(X) %*% delta)/N)
-            |
-            |         iteration = iteration+1
-            |     }
-            | }
-            |
-            | gnmf = function(matrix[double] X, Integer r, Integer iterations)
-            |     return (integer iteration) {
-            |     W = rand(rows = nrow(X), cols = r, pdf = 'uniform')
-            |     H = rand(rows = r, cols = ncol(X), pdf = 'uniform')
-            |
-            |     for (i in 1:3) {
-            |         W = W * ((X %*% t(H)) / (W %*% (H %*% t(H))))
-            |         H = H * ((t(W) %*% X) / ((t(W) %*% W) %*% H))
-            |     }
-            |     if ((as.scalar(W[1,1]) >  0) & (as.scalar(H[1,1]) > 0)) {
-            |         print(as.scalar(H[1,1]))
-            |         print(as.scalar(W[1,1]))
-            |     }
-            |
-            |     iteration = 0
-            | }
-            |
-            | reg = function(matrix[double] X, matrix[double] y)
-            |     return (matrix[double] b) {
-            |     b = solve(t(X) %*% X, t(X) %*% y)
-            | }
-            |
-            | robust_se = function(matrix[double] X, 
-            |                      matrix[double] r2) 
-            |     return (matrix[double] se) {
-            |     # NOTE: SVD is cheap since XTX is small!
-            |     [U,H,V] = svd( t(X) %*% X )
-            |     h = diag( H )
-            |     XTX_INV = U %*% diag(h^-1) %*% t(V)
-            |     S = diag( r2 )
-            |     se = XTX_INV %*% (t(X) %*% S %*% X) %*% XTX_INV
-            | }
-            |            
-            | pca = function(matrix[double] X, Integer k) 
-            |   return (matrix[double] PRJ) {
-            |     N = nrow( X )
-            |     K = ncol( X )
-            |     XS = X - colMeans( X )
-            |     S = (1/(N-1))*(t( XS ) %*% XS)
-            |     [eigvals, eigvects] = eigen( S )
-            |     
-            |     # Thanks to the Sysml implementation for this helpful bit 
-            |     # of code to sort the eigenvectors
-            |
-            |     eigssorted = order(target=eigvals,by=1, 
-            |                        decreasing=TRUE,
-            |                        index.return=TRUE)
-            |     diagmat = table(seq(1,K), eigssorted)
-            |     eigvals = diagmat %*% eigvals
-            |     eigvects = eigvects %*% diagmat
-            |     eigvects = eigvects[,1:k]
-            |
-            |     PRJ = XS %*% eigvects
-            | }
-        """.stripMargin
-        println("Running DML: ")
-        println(dmlText)
-        val script = dml(dmlText).out("times")
-        val res = ml.execute(script)
-        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
-
-        File(path).appendAll(
-            nproc + "," + results(0).mkString(",") + '\n')
-    }
-}
-
-Running: taskset -c 0-23 spark-submit --class SystemMLMLAlgorithms  --driver-cores 24   ./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar opType=gnmf mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-./mllib/src/main/scala/spark_ml_algs.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.rdd._
-import breeze.linalg.*
-import breeze.{math => bMath,
-               numerics => bNum,
-               linalg => bAlg}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.random.RandomRDDs._
-import org.apache.spark.mllib.linalg.distributed._
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.io.Source
-import java.util.Random
-
-object SparkMLAlgorithms {
-    def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val spark = SparkSession.builder.getOrCreate()
-
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
-
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow").toInt
-        val ncol = argMap("ncol").toInt
-        val nproc = argMap("nproc").toInt
-
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"mllib_${opType}.txt"
-        val path = root + stub + base
-
-        if (!Files.exists(Paths.get(path))) {
-          File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
-
-        val x = as_dense( Matrices.rand(nrow, ncol, new Random()) )
-        val y = opType match {
-            case "gnmf" => vectorize( Matrices.rand(1, 1, new Random()) )
-            case _ => vectorize( Matrices.rand(nrow, 1, new Random()) )
-        }
-
-        val r2 = opType match {
-            case "robust" => compute_r2(x, y)
-            case _ => vectorize( Matrices.rand(1, 1, new Random()) )
-        }
-
-        val times = Array[Double](0,0,0,0,0)
-        for (ix <- 0 to 4) {
-            println(s"Test: ${ix}")
-            val start = System.nanoTime()
-
-            if (opType == "logit")
-                logit(x, y, 3)
-            if (opType == "gnmf")
-                gnmf(x, 10, 3)
-            if (opType == "reg")
-                reg(x, y)
-            if (opType == "robust")
-                robust_se(x, r2)
-
-            val stop = System.nanoTime()
-            times(ix) = (stop - start)/1e9
-        }
-
-        File(path).appendAll(
-            nproc + "," + times.mkString(",") + "\n")
-    }
-
-    def compute_r2(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        val b = reg(X, y)
-        val y_hat = X.multiply(b)
-        val eps = as_breeze( y ) - as_breeze( y_hat )
-        return from_breeze(eps:^2.0)
-    }
-
-    def logit(X: DenseMatrix, y: DenseVector, max_iter: Int) : DenseVector = {
-        val N = X.numRows
-        val K = X.numCols
-
-        var w = vectorize( Matrices.rand(K, 1, new Random()) )
-        var iteration = 0
-        val stepSize = 0.001
-
-        while (iteration < max_iter) {
-            val xb = X.multiply(w)
-            val eps = from_breeze(
-                as_breeze( y ) - bNum.sigmoid( as_breeze( xb )))
-            val delta = as_breeze(
-                X.transpose.multiply(eps)):*(stepSize/N.toDouble)
-            w = from_breeze( as_breeze( w ) - delta )
-            iteration = iteration + 1
-        }
-
-        return w
-    }
-
-    def reg(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        return as_dense(from_breeze((as_breeze( X.transpose.multiply(X) ).
-                    asInstanceOf[bDenseMatrix[Double]] \ 
-                as_breeze( X.transpose.multiply(y) ).
-                    asInstanceOf[bDenseVector[Double]])))
-    }
-
-    def gnmf(X: DenseMatrix, r: Int, iterations: Int) : 
-        (DenseMatrix, DenseMatrix) = {
-        val N = X.numRows
-        val K = X.numCols
-        var W = as_dense(Matrices.rand(N, r, new Random()))
-        var H = as_dense(Matrices.rand(r, K, new Random()))
-
-        var iteration = 0
-        while (iteration < iterations) {
-            W = from_breeze( 
-                as_breeze(W) :* (
-                    as_breeze(X.multiply(H.transpose)) :/
-                    as_breeze(W.multiply(H.multiply(H.transpose))) )
-            )
-            H = from_breeze(
-                as_breeze(H) :* (
-                    as_breeze(W.transpose.multiply(X)) :/
-                    as_breeze(W.transpose.multiply(W).multiply(H))
-                )
-            )
-            iteration = iteration + 1
-        }
-        return (W,H)
-    }
-
-    def robust_se(X: DenseMatrix, eps: DenseVector) : DenseMatrix = {
-        val XTX_INV = from_breeze(bAlg.inv(as_breeze(X.transpose.multiply(X))))
-        val XBT = as_breeze( X.transpose )
-        val S = XBT(*,::)*as_breeze(eps)
-        val VAR = XTX_INV.multiply(from_breeze(S).
-                                   multiply(X).
-                                   multiply(XTX_INV))
-        return VAR
-    }
-
-    def as_breeze(v: linalg.DenseVector) : bDenseVector[Double] = {
-        return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bDenseVector[Double]) : linalg.DenseVector = {
-        return as_dense(Vectors.dense(v.data))
-    }
-
-    def as_breeze(m: linalg.DenseMatrix) : bDenseMatrix[Double] = {
-        return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-    }
-
-    def from_breeze(m: bDenseMatrix[Double]) : linalg.DenseMatrix = {
-        return as_dense(Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data))
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense( M.toArray ) )
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    }
-}
-
-Running: taskset -c 0-23 spark-submit --class SparkMLAlgorithms  --driver-cores 24   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=gnmf mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-with open(__file__) as fh: print fh.read()
-import os
-import sys
-import numpy as np
-import numpy.linalg as alg
 import pandas as pd
 
 ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
@@ -2325,104 +1005,324 @@ if (ROOT is None):
     raise StandardError(msg)
 
 sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
 import np_timing_utils as utils
 
 def main(kwargs):
     mattype = kwargs['mattype']
-    opType = kwargs['opType']
+    op_type = kwargs['opType']
     nrow = int(kwargs['nrow'])
     ncol = int(kwargs['ncol'])
     nproc = int(kwargs['nproc'])
 
-    path = '../output/np_{}.txt'.format(opType)
+    path = '../output/scidb_{}.txt'.format(op_type)
     colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(nproc, debug=True)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
+    print cxn.iquery("list('instances')", fetch=True)
 
     env = {
-        'logit_reg': logit_reg,
+        'cxn': cxn, 
         'reg': reg,
+        'logit': logit,
         'gnmf': gnmf,
         'robust_se': robust_se
     }
-    X = np.random.rand(nrow, ncol)
-    y = np.random.rand(nrow,1).ravel() if opType != 'gnmf' else None
 
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2)
-        call = 'robust_se(X, eps)'
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')        
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
+
+    run_times.loc[:,'nproc'] = nproc
+    run_times.loc[:,1:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
+
+    P.terminate()
+    stdout.close()
+    stderr.close()
+
+def init_scidb(nproc, debug=False):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
+
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
+
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
     else:
-        raise StandardError('Invalid Operation')
+        stdout = open('scidb.out', 'w')
+        stderr = open('scidb.err', 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(nproc-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-def logit_reg(X, y, iterations=3):
-    N,K = X.shape
-    w = np.random.rand(K,1).ravel()
+    # materialize the inner produce matrix
+    s = time.time()
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(X=X_table_name, Z=zname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    print 'COMPUTE XTX: {}s'.format(time.time() - s)
+    
+    # compute the inverse of XTX
+    s = time.time()
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+    print 'COMPUTE INVERSE: {}s'.format(time.time() - s)
+
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    s = time.time()
+    stmt = """
+        consume(gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z}))
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    print 'COMPUTE PROJECTION: {}s'.format(time.time() - s)
+    cxn.iquery(stmt)
+
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
+
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
     iteration = 0
-    step_size = 0.001
-
     while iteration < iterations:
-        xb = X.dot(w)
-        delta = y - (1/1+np.exp(-xb))
-        step_size /= 2
-        w = w + step_size*(X.T.dot(delta)/float(N))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
         iteration += 1
 
-    return w
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-def gnmf(X, r, iterations=3):
-    N,K = X.shape
-    W = np.random.rand(N, r)
-    H = np.random.rand(r, K)
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
+
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
+
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
+
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
+
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
+
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
+
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb:true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb:true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
+
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa:true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa:true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
 
     iteration = 0
     while iteration < iterations:
-        W = W*((X.dot(H.T))/(W.dot(H.dot(H.T))))
-        H = H*((W.T.dot(X))/((W.T.dot(W).dot(H))))
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
         iteration += 1
 
-    return W,H
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
 
-def reg(X,y):
-    return alg.solve(X.T.dot(X), X.T.dot(y))
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
 
-def robust_se(X, r2):
-    S = X.T*r2
-    XTX_INV = alg.inv(X.T.dot(X))
-    return XTX_INV.dot(S.dot(X)).dot(XTX_INV)
+def matrix_diag(N, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn)):
+        cxn.iquery("remove('{}')".format(name))
+    if (overwrite is False) and (name in dir(cxn)):
+        return
+    stmt = """
+        store(filter(
+            build(<val:double>[row=0:{N}:0:{cz};col=0:{N}:0:{cz}], 
+                 iif(row=col, (RANDOM() % 100) / 10.0, 0)), 
+                 val <> 0), {name})
+    """.format(N=N, cz=chunksize, name=name)
+    print stmt
+    cxn.iquery(stmt)  
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
 
 if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
 
-Running: taskset -c 0-23 python _np_algs.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
+Running: taskset -c 0-23 python _scidb_algs.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=8
 
 CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 with open(__file__) as fh: print fh.read()
 import os
 import sys
+import time
+import atexit
+import scidbpy
+import subprocess
+
 import numpy as np
-import numpy.linalg as alg
 import pandas as pd
-import tensorflow as tf
 
 ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
 if (ROOT is None):
@@ -2430,657 +1330,627 @@ if (ROOT is None):
     raise StandardError(msg)
 
 sys.path.append(os.path.join(ROOT,'lib','python'))
-from sql_cxn import SQLCxn
 import np_timing_utils as utils
 
 def main(kwargs):
     mattype = kwargs['mattype']
-    opType = kwargs['opType']
+    op_type = kwargs['opType']
     nrow = int(kwargs['nrow'])
     ncol = int(kwargs['ncol'])
     nproc = int(kwargs['nproc'])
 
-    path = '../output/tf_{}.txt'.format(opType)
+    path = '../output/scidb_{}.txt'.format(op_type)
     colnames = ['nproc','time1','time2','time3','time4','time5']
-    runTimes = pd.DataFrame(np.zeros((1,len(colnames))))
-    runTimes.columns = colnames
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(nproc, debug=True)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
+    print cxn.iquery("list('instances')", fetch=True)
 
     env = {
-        'np': np, 'tf': tf,
-        'logit_reg': logit_reg,
+        'cxn': cxn, 
         'reg': reg,
+        'logit': logit,
         'gnmf': gnmf,
         'robust_se': robust_se
     }
-    X = np.random.rand(nrow, ncol).astype(np.float32)
-    if opType != 'gnmf':
-        y = (np.random.rand(nrow,1) >= 0.80).astype(np.int64)
+
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')        
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
+
+    run_times.loc[:,'nproc'] = nproc
+    run_times.loc[:,1:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
+
+    P.terminate()
+    stdout.close()
+    stderr.close()
+
+def init_scidb(nproc, debug=False):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
+
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
+
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
     else:
-        y = None
-    if opType == 'logit':
-        call = 'logit_reg(X,y)'
-    elif opType == 'reg':
-        call = 'reg(X,y)'
-    elif opType == 'gnmf':
-        call = 'gnmf(X, 10)'
-    elif opType == 'robust':
-        b = reg(X, y)
-        y_hat = X.dot(b)
-        env['eps'] = np.power(y_hat, 2).ravel()
-        call = 'robust_se(X, eps)'
-    else:
-        raise StandardError('Invalid Operation')
+        stdout = open('scidb.out', 'w')
+        stderr = open('scidb.err', 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(nproc-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-    env['X'] = X
-    env['y'] = y
-    runTimes.ix[:,'nproc'] = nproc
-    runTimes.ix[:,1:] = utils.timeOp(call, env)
-    writeHeader = not os.path.exists(path)
-    runTimes.to_csv(path, index=False, header = writeHeader, mode = 'a')
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-def logit_reg(Xdata, ydata, iterations=3):
-    def doLogitIter(w, stepSize, iteration):
+    # materialize the inner produce matrix
+    s = time.time()
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(X=X_table_name, Z=zname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    print 'COMPUTE XTX: {}s'.format(time.time() - s)
+    
+    # compute the inverse of XTX
+    s = time.time()
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+    print 'COMPUTE INVERSE: {}s'.format(time.time() - s)
+
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    s = time.time()
+    stmt = """
+        consume(gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z}))
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    print 'COMPUTE PROJECTION: {}s'.format(time.time() - s)
+    cxn.iquery(stmt)
+
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
+
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
+
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
         iteration += 1
-        xb = tf.matmul(X,w)
-        delta = tf.subtract(1/(1+tf.exp(-xb)),y)
-        stepSize /= float(4.0)
-        w = w - stepSize*(tf.matmul(Xt, delta)/N)
-        return (w, stepSize, iteration)
 
-    G = tf.Graph()
-    with G.as_default():
-        N = Xdata.shape[0]
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-        Xt = tf.transpose(X)
-        w = tf.Variable(tf.zeros(shape=(Xdata.shape[1],1)))
-        stepSize = 10.0
-        iteration = tf.constant(0)
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
 
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doLogitIter, (w, stepSize, iteration))
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
 
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X: Xdata, y: ydata})
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
 
-    return res[0]
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
 
-def gnmf(Xdata, r, iterations=3):
-    def doGNMFIter(W, H, iteration):
-        W = tf.multiply(W, tf.div(tf.matmul(X, H, transpose_b=True),
-                        tf.matmul(W, tf.matmul(H, H, transpose_b=True))))
-        H = tf.multiply(H, tf.div(tf.matmul(W, X, transpose_a=True),
-                        tf.matmul(tf.matmul(W, W, transpose_a=True), H)))
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
+
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
+
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb:true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb:true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
+
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa:true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa:true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
+
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
         iteration += 1
-        return (W, H, iteration)
 
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
 
-        W = tf.Variable(tf.random_uniform((Xdata.shape[0],r)))
-        H = tf.Variable(tf.random_uniform((r, Xdata.shape[1])))
-        iteration = tf.constant(0)
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
 
-        cond = lambda x,y,z: tf.less(z, iterations)
-        loop = tf.while_loop(cond, doGNMFIter, (W,H,iteration))
+def matrix_diag(N, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn)):
+        cxn.iquery("remove('{}')".format(name))
+    if (overwrite is False) and (name in dir(cxn)):
+        return
+    stmt = """
+        store(filter(
+            build(<val:double>[row=0:{N}:0:{cz};col=0:{N}:0:{cz}], 
+                 iif(row=col, (RANDOM() % 100) / 10.0, 0)), 
+                 val <> 0), {name})
+    """.format(N=N, cz=chunksize, name=name)
+    print stmt
+    cxn.iquery(stmt)  
 
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(loop, feed_dict={X : Xdata})
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
 
-    return (res[0], res[1])
-
-def reg(Xdata, ydata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        y = tf.placeholder(tf.float32, shape=ydata.shape)
-
-        b = tf.matrix_solve(
-                tf.matmul(X, X, transpose_a=True),
-                tf.matmul(X, y, transpose_a=True)
-            )
-
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(b, feed_dict={X: Xdata, y: ydata})
-
-    return res
-
-def robust_se(Xdata, epsdata):
-    G = tf.Graph()
-    with G.as_default():
-        X = tf.placeholder(tf.float32, shape=Xdata.shape)
-        eps = tf.placeholder(tf.float32, shape=epsdata.shape)
-        S = tf.transpose( X )*eps
-        XTX_INV = tf.matrix_inverse(tf.matmul(X,X,transpose_a=True))
-        VAR = tf.matmul(
-            tf.matmul(XTX_INV, tf.matmul(S,X)), XTX_INV)
-        init = tf.global_variables_initializer()
-        with tf.Session() as sess:
-            sess.run(init)
-            res = sess.run(VAR, feed_dict={X: Xdata, eps: epsdata})
-
-    return res
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
 
 if __name__=='__main__':
-    args = utils.parse_cmd_args(sys.argv[1:])
-    main(args)
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
 
-
-Running: taskset -c 0-23 python _tf_algorithms.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-
-main <- function(argv) {
-    mattype <- argList[['mattype']]
-    opType <- argList[['opType']]
-    nrow <- as.numeric(argList[['nrow']])
-    ncol <- as.numeric(argList[['ncol']])
-    nproc <- as.numeric(argList[['nproc']])
-    path <- paste('../output/R_', opType, '.txt', sep='')
-
-    colnames <- c('nproc','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    X <- allocMatrix(nrow, ncol)
-    print(dim(X))
-    if (opType != 'gnmf') {
-        y <- allocMatrix(nrow, 1, TRUE)
-    }
-    if (opType == 'logit') {
-        call <- 'logitReg(X,y)'
-    } else if (opType == 'reg') {
-        call <- 'reg(X,y)'
-    } else if (opType == 'gnmf') {
-        call <- 'gnmf(X,10)'
-    } else if (opType == 'robust') {
-        b <- reg(X,y)
-        y_hat <- X %*% b
-        eps <- as.vector(y_hat^2)
-        print(length(eps))
-        call <- 'robust_se(X,eps)'
-    }
-
-    runTimes[1,'nproc'] <- nproc
-    runTimes[1,2:ncol(runTimes)] <- timeOp(call)
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-allocMatrix <- function(rows, cols, binary=FALSE) {
-    if (binary) {
-        M <- as.numeric(matrix(runif(rows*cols), nrow=rows, ncol=cols) >= .80)
-    } else {
-        M <- matrix(rnorm(rows*cols), nrow=rows, ncol=cols)
-    }
-    return(M)
-}
-
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
-    w <- allocMatrix(ncol(X),1)
-    iteration <- 1
-    stepSize <- 10
-
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
-
-        iteration <- iteration+1
-    }
-
-    return(w)
-}
-
-gnmf <- function(X, r, iterations=3) {
-    W <- allocMatrix(nrow(X), r)
-    H <- allocMatrix(r, ncol(X))
-
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
-    }
-
-    return(list(W,H))
-}
-
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
-
-robust_se <- function(X, r2) {
-    S <- sweep(t(X), MARGIN=2, STATS=r2, FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-main()
-
-Running: taskset -c 0-23 Rscript ml_algs.R opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
+Running: taskset -c 0-23 python _scidb_algs.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=16
 
 CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-./systemml/src/main/scala/systemml_ml_algorithms.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.sysml.api.mlcontext._
-import org.apache.sysml.api.mlcontext.ScriptFactory._
-import org.apache.sysml.api.mlcontext.MatrixFormat._
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import scala.io.Source
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.collection.immutable._
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.{linalg => malg}
-import org.apache.spark.mllib.linalg.distributed._
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-object SystemMLMLAlgorithms extends App {
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import atexit
+import scidbpy
+import subprocess
 
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val ml = new MLContext(sc)
-        val spark = SparkSession.builder.getOrCreate()
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+import numpy as np
+import pandas as pd
 
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
 
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow")
-        val ncol = argMap("ncol")
-        val nproc = argMap("nproc")
+sys.path.append(os.path.join(ROOT,'lib','python'))
+import np_timing_utils as utils
 
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"systemml_${opType}.txt"
-        val path = root + stub + base
-        if (!File(path).exists) {
-            File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
+def main(kwargs):
+    mattype = kwargs['mattype']
+    op_type = kwargs['opType']
+    nrow = int(kwargs['nrow'])
+    ncol = int(kwargs['ncol'])
+    nproc = int(kwargs['nproc'])
 
-        val call = opType match {
-            case "logit"  => "logit(X, y, 10)"
-            case "gnmf"   => "gnmf(X, 10, 10)"
-            case "reg"    => "reg(X, y)"
-            case "robust" => "robust_se(X, r2)"
-            case "pca"    => "pca(X, 5)"
-            case _        => ""
-        }
+    path = '../output/scidb_{}.txt'.format(op_type)
+    colnames = ['nproc','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
 
-        val alloc_y_string = opType match {
-            case "gnmf"  => "rand(rows=1, cols=1)"
-            case _ => s"rand(rows=${nrow}, cols=1, pdf='uniform')"
-        }
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(nproc, debug=True)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
+    print cxn.iquery("list('instances')", fetch=True)
 
-        val print_op = opType match {
-           case "gnmf" => ""
-           case _      => "res = utils::printRandElements(tmp, 10)"
-        }
-
-        val preprocess_string = opType match {
-            case "robust" => 
-                """
-                | b = reg(X,y)
-                | y_hat = X %*% b
-                | r2 = (y - y_hat)^2
-                """.stripMargin
-            case _        => ""
-        }
-
-        val libDir = root + "/lib/dml"
-        val dmlText =
-          s"""
-            | setwd('${libDir}')
-            | source('utils.dml') as utils
-            |
-            | X = rand(rows=${nrow}, cols=${ncol})
-            | rvect = ${alloc_y_string}
-            | y = rvect > 0.80
-            | p = sum( X )
-            | q = sum( y )
-            | print(p)
-            | print(q)
-            |
-            | ${preprocess_string}
-            |
-            | times = matrix(0.0, rows = 5, cols = 1)
-            | for (ix in 1:5) {
-            |   if ((p != 0) | (q != 0)) {
-            |       start = utils::time(1)
-            |   }
-            |   tmp = ${call}
-            |   ${print_op}
-            |   if ((p != 0) | (q != 0)) {
-            |       stop = utils::time(1)
-            |   }
-            |   times[ix,1] = (stop - start) / 1000
-            | }
-            | times = t(times)
-            |
-            | logit = function(matrix[double] X, 
-            |                  matrix[double] y, 
-            |                  Integer iterations)
-            |     return (matrix[double] w) {
-            |
-            |     N = nrow(X)
-            |     w = matrix(0, rows=ncol(X), cols=1)
-            |     iteration = 0
-            |     stepSize = 10
-            |
-            |     while (iteration < iterations) {
-            |         xb = X %*% w
-            |         delta = 1/(1+exp(-xb)) - y
-            |         stepSize = stepSize / 2
-            |         w = w - ((stepSize * t(X) %*% delta)/N)
-            |
-            |         iteration = iteration+1
-            |     }
-            | }
-            |
-            | gnmf = function(matrix[double] X, Integer r, Integer iterations)
-            |     return (integer iteration) {
-            |     W = rand(rows = nrow(X), cols = r, pdf = 'uniform')
-            |     H = rand(rows = r, cols = ncol(X), pdf = 'uniform')
-            |
-            |     for (i in 1:3) {
-            |         W = W * ((X %*% t(H)) / (W %*% (H %*% t(H))))
-            |         H = H * ((t(W) %*% X) / ((t(W) %*% W) %*% H))
-            |     }
-            |     if ((as.scalar(W[1,1]) >  0) & (as.scalar(H[1,1]) > 0)) {
-            |         print(as.scalar(H[1,1]))
-            |         print(as.scalar(W[1,1]))
-            |     }
-            |
-            |     iteration = 0
-            | }
-            |
-            | reg = function(matrix[double] X, matrix[double] y)
-            |     return (matrix[double] b) {
-            |     b = solve(t(X) %*% X, t(X) %*% y)
-            | }
-            |
-            | robust_se = function(matrix[double] X, 
-            |                      matrix[double] r2) 
-            |     return (matrix[double] se) {
-            |     # NOTE: SVD is cheap since XTX is small!
-            |     [U,H,V] = svd( t(X) %*% X )
-            |     h = diag( H )
-            |     XTX_INV = U %*% diag(h^-1) %*% t(V)
-            |     S = diag( r2 )
-            |     se = XTX_INV %*% (t(X) %*% S %*% X) %*% XTX_INV
-            | }
-            |            
-            | pca = function(matrix[double] X, Integer k) 
-            |   return (matrix[double] PRJ) {
-            |     N = nrow( X )
-            |     K = ncol( X )
-            |     XS = X - colMeans( X )
-            |     S = (1/(N-1))*(t( XS ) %*% XS)
-            |     [eigvals, eigvects] = eigen( S )
-            |     
-            |     # Thanks to the Sysml implementation for this helpful bit 
-            |     # of code to sort the eigenvectors
-            |
-            |     eigssorted = order(target=eigvals,by=1, 
-            |                        decreasing=TRUE,
-            |                        index.return=TRUE)
-            |     diagmat = table(seq(1,K), eigssorted)
-            |     eigvals = diagmat %*% eigvals
-            |     eigvects = eigvects %*% diagmat
-            |     eigvects = eigvects[,1:k]
-            |
-            |     PRJ = XS %*% eigvects
-            | }
-        """.stripMargin
-        println("Running DML: ")
-        println(dmlText)
-        val script = dml(dmlText).out("times")
-        val res = ml.execute(script)
-        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
-
-        File(path).appendAll(
-            nproc + "," + results(0).mkString(",") + '\n')
-    }
-}
-
-Running: taskset -c 0-23 spark-submit --class SystemMLMLAlgorithms  --driver-cores 24   ./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
-
-CPU count capped at: 24
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-./mllib/src/main/scala/spark_ml_algs.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.rdd._
-import breeze.linalg.*
-import breeze.{math => bMath,
-               numerics => bNum,
-               linalg => bAlg}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.random.RandomRDDs._
-import org.apache.spark.mllib.linalg.distributed._
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import scala.io.Source
-import java.util.Random
-
-object SparkMLAlgorithms {
-    def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val spark = SparkSession.builder.getOrCreate()
-
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
-
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val nrow = argMap("nrow").toInt
-        val ncol = argMap("ncol").toInt
-        val nproc = argMap("nproc").toInt
-
-        val stub = "/tests/MLAlgorithms (Single Node Dense)/output/"
-        val base = s"mllib_${opType}.txt"
-        val path = root + stub + base
-
-        if (!Files.exists(Paths.get(path))) {
-          File(path).writeAll("nproc,time1,time2,time3,time4,time5\n")
-        }
-
-        val x = as_dense( Matrices.rand(nrow, ncol, new Random()) )
-        val y = opType match {
-            case "gnmf" => vectorize( Matrices.rand(1, 1, new Random()) )
-            case _ => vectorize( Matrices.rand(nrow, 1, new Random()) )
-        }
-
-        val r2 = opType match {
-            case "robust" => compute_r2(x, y)
-            case _ => vectorize( Matrices.rand(1, 1, new Random()) )
-        }
-
-        val times = Array[Double](0,0,0,0,0)
-        for (ix <- 0 to 4) {
-            println(s"Test: ${ix}")
-            val start = System.nanoTime()
-
-            if (opType == "logit")
-                logit(x, y, 3)
-            if (opType == "gnmf")
-                gnmf(x, 10, 3)
-            if (opType == "reg")
-                reg(x, y)
-            if (opType == "robust")
-                robust_se(x, r2)
-
-            val stop = System.nanoTime()
-            times(ix) = (stop - start)/1e9
-        }
-
-        File(path).appendAll(
-            nproc + "," + times.mkString(",") + "\n")
+    env = {
+        'cxn': cxn, 
+        'reg': reg,
+        'logit': logit,
+        'gnmf': gnmf,
+        'robust_se': robust_se
     }
 
-    def compute_r2(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        val b = reg(X, y)
-        val y_hat = X.multiply(b)
-        val eps = as_breeze( y ) - as_breeze( y_hat )
-        return from_breeze(eps:^2.0)
-    }
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')        
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
 
-    def logit(X: DenseMatrix, y: DenseVector, max_iter: Int) : DenseVector = {
-        val N = X.numRows
-        val K = X.numCols
+    run_times.loc[:,'nproc'] = nproc
+    run_times.loc[:,1:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
 
-        var w = vectorize( Matrices.rand(K, 1, new Random()) )
-        var iteration = 0
-        val stepSize = 0.001
+    P.terminate()
+    stdout.close()
+    stderr.close()
 
-        while (iteration < max_iter) {
-            val xb = X.multiply(w)
-            val eps = from_breeze(
-                as_breeze( y ) - bNum.sigmoid( as_breeze( xb )))
-            val delta = as_breeze(
-                X.transpose.multiply(eps)):*(stepSize/N.toDouble)
-            w = from_breeze( as_breeze( w ) - delta )
-            iteration = iteration + 1
-        }
+def init_scidb(nproc, debug=False):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
 
-        return w
-    }
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
 
-    def reg(X: DenseMatrix, y: DenseVector) : DenseVector = {
-        return as_dense(from_breeze((as_breeze( X.transpose.multiply(X) ).
-                    asInstanceOf[bDenseMatrix[Double]] \ 
-                as_breeze( X.transpose.multiply(y) ).
-                    asInstanceOf[bDenseVector[Double]])))
-    }
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
+    else:
+        stdout = open('scidb.out', 'w')
+        stderr = open('scidb.err', 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(nproc-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-    def gnmf(X: DenseMatrix, r: Int, iterations: Int) : 
-        (DenseMatrix, DenseMatrix) = {
-        val N = X.numRows
-        val K = X.numCols
-        var W = as_dense(Matrices.rand(N, r, new Random()))
-        var H = as_dense(Matrices.rand(r, K, new Random()))
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-        var iteration = 0
-        while (iteration < iterations) {
-            W = from_breeze( 
-                as_breeze(W) :* (
-                    as_breeze(X.multiply(H.transpose)) :/
-                    as_breeze(W.multiply(H.multiply(H.transpose))) )
-            )
-            H = from_breeze(
-                as_breeze(H) :* (
-                    as_breeze(W.transpose.multiply(X)) :/
-                    as_breeze(W.transpose.multiply(W).multiply(H))
-                )
-            )
-            iteration = iteration + 1
-        }
-        return (W,H)
-    }
+    # materialize the inner produce matrix
+    s = time.time()
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(X=X_table_name, Z=zname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    print 'COMPUTE XTX: {}s'.format(time.time() - s)
+    
+    # compute the inverse of XTX
+    s = time.time()
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+    print 'COMPUTE INVERSE: {}s'.format(time.time() - s)
 
-    def robust_se(X: DenseMatrix, eps: DenseVector) : DenseMatrix = {
-        val XTX_INV = from_breeze(bAlg.inv(as_breeze(X.transpose.multiply(X))))
-        val XBT = as_breeze( X.transpose )
-        val S = XBT(*,::)*as_breeze(eps)
-        val VAR = XTX_INV.multiply(from_breeze(S).
-                                   multiply(X).
-                                   multiply(XTX_INV))
-        return VAR
-    }
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    s = time.time()
+    stmt = """
+        consume(gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z}))
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    print 'COMPUTE PROJECTION: {}s'.format(time.time() - s)
+    cxn.iquery(stmt)
 
-    def as_breeze(v: linalg.DenseVector) : bDenseVector[Double] = {
-        return new bDenseVector[Double](v.values)
-    }
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
 
-    def from_breeze(v: bDenseVector[Double]) : linalg.DenseVector = {
-        return as_dense(Vectors.dense(v.data))
-    }
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
-    def as_breeze(m: linalg.DenseMatrix) : bDenseMatrix[Double] = {
-        return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-    }
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
+        iteration += 1
 
-    def from_breeze(m: bDenseMatrix[Double]) : linalg.DenseMatrix = {
-        return as_dense(Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data))
-    }
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense( M.toArray ) )
-    }
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
 
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
 
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    }
-}
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
 
-Running: taskset -c 0-23 spark-submit --class SparkMLAlgorithms  --driver-cores 24   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
+
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
+
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
+
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb:true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb:true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
+
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa:true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa:true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
+
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
+        iteration += 1
+
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
+
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
+
+def matrix_diag(N, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn)):
+        cxn.iquery("remove('{}')".format(name))
+    if (overwrite is False) and (name in dir(cxn)):
+        return
+    stmt = """
+        store(filter(
+            build(<val:double>[row=0:{N}:0:{cz};col=0:{N}:0:{cz}], 
+                 iif(row=col, (RANDOM() % 100) / 10.0, 0)), 
+                 val <> 0), {name})
+    """.format(N=N, cz=chunksize, name=name)
+    print stmt
+    cxn.iquery(stmt)  
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+if __name__=='__main__':
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
+
+Running: taskset -c 0-23 python _scidb_algs.py opType=robust mattype=tall nrow="10000000" ncol=100 fixedAxis=100 step=10 nproc=24
 
 CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
 
- make.py ended: 2018-01-31 06:15:49
+ make.py ended: 2018-06-11 23:26:03

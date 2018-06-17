@@ -1,0 +1,157 @@
+[info] Loading project definition from /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Disk)/src/systemml/project
+[info] Set current project to SystemMLMatrixOps (in build file:/home/ubuntu/SLAB/tests/SimpleMatrixOps%20(Distributed%20Disk)/src/systemml/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Including from cache: SystemML.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/DEPENDENCIES' with strategy 'discard'
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.xml' with strategy 'discard'
+[warn] Strategy 'discard' was applied to 6 files
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Disk)/src/systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar
+[success] Total time: 4 s, completed Apr 18, 2018 6:18:27 PM
+[info] Loading project definition from /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Disk)/src/mllib/project
+[info] Set current project to MLLibMatrixops (in build file:/home/ubuntu/SLAB/tests/SimpleMatrixOps%20(Distributed%20Disk)/src/mllib/)
+[info] Including from cache: native_system-java-1.1.jar
+[info] Including from cache: native_ref-java-1.1.jar
+[info] Including from cache: netlib-native_system-linux-x86_64-1.1-natives.jar
+[info] Including from cache: jniloader-1.1.jar
+[info] Including from cache: netlib-native_system-linux-i686-1.1-natives.jar
+[info] Including from cache: netlib-native_system-win-x86_64-1.1-natives.jar
+[info] Including from cache: core-1.1.2.jar
+[info] Including from cache: netlib-native_system-osx-x86_64-1.1-natives.jar
+[info] Including from cache: netlib-native_system-linux-armhf-1.1-natives.jar
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Including from cache: netlib-native_system-win-i686-1.1-natives.jar
+[info] Including from cache: netlib-native_ref-linux-i686-1.1-natives.jar
+[info] Including from cache: netlib-native_ref-linux-armhf-1.1-natives.jar
+[info] Including from cache: netlib-native_ref-linux-x86_64-1.1-natives.jar
+[info] Including from cache: netlib-native_ref-win-x86_64-1.1-natives.jar
+[info] Including from cache: netlib-native_ref-osx-x86_64-1.1-natives.jar
+[info] Including from cache: netlib-native_ref-win-i686-1.1-natives.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/core/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/core/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/native_ref-java/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/native_ref-java/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/native_system-java/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/native_system-java/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-linux-armhf/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-linux-armhf/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-linux-i686/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-linux-i686/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-linux-x86_64/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-linux-x86_64/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-osx-x86_64/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-osx-x86_64/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-win-i686/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-win-i686/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-win-x86_64/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_ref-win-x86_64/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-linux-armhf/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-linux-armhf/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-linux-i686/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-linux-i686/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-linux-x86_64/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-linux-x86_64/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-osx-x86_64/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-osx-x86_64/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-win-i686/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-win-i686/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-win-x86_64/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil.netlib/netlib-native_system-win-x86_64/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil/jniloader/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/com.github.fommil/jniloader/pom.xml' with strategy 'discard'
+[warn] Strategy 'discard' was applied to 33 files
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Disk)/src/mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar
+[success] Total time: 3 s, completed Apr 18, 2018 6:18:37 PM
+-rw-r--r--   1 ubuntu supergroup         77 2018-04-12 04:38 /scratch/pass.csv
+com.github.fommil.netlib.F2jBLAS
+Test => 0
+Test => 1
+Test => 2
+Test => 3
+Test => 4
+com.github.fommil.netlib.F2jBLAS
+20000000
+com.github.fommil.netlib.F2jBLAS
+20000000
+25819.661486370635
+25819.661486370645
+25819.661486370638
+25819.661486370638
+25819.66148637064
+com.github.fommil.netlib.F2jBLAS
+20000000
+com.github.fommil.netlib.F2jBLAS
+20000000
+com.github.fommil.netlib.F2jBLAS
+Test => 0
+Test => 1
+Test => 2
+Test => 3
+Test => 4
+Writing 0 of 1.0 chunks
+WARNING: File exists. No data copied
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M16_wide.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_wide.csv tableStub=16_wide nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M16_wide.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_wide.csv tableStub=16_wide nodes=2 passPath=/scratch/pass.csv outdir=scale_nodes
+Cleared: ../temp
+Cleared: ../external
+
+Start log file:  ../output/make.log
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: python _node_scaling_tests.py 2 "16" "MLLIB" "TRANS MVM NORM TSM ADD GMM"
+
+End log file:  ../output/make.log

@@ -59,8 +59,8 @@ start_make_logging()
 
 # compile
 makelog = '../../output/make.log'
-utils.run_sbt('./systemml', makelog=makelog)
-utils.run_sbt('./mllib', makelog=makelog)
+# utils.run_sbt('./systemml', makelog=makelog)
+# utils.run_sbt('./mllib', makelog=makelog)
 
 cmd_args_template = 'opType={} mattype={} nrow="{}" ncol=100'
 mattype = 'tall'
@@ -93,6 +93,9 @@ for op in op_types:
         if 'MADLIB' in systems:
              utils.run_python(program='madlib_algs.py',
                               cmd_args=cmd_args)
+        if 'SCIDB' in systems:
+            utils.run_python(program='scidb_algs.py',
+                             cmd_args=cmd_args)
 
 remove_dir('scratch_space')
 

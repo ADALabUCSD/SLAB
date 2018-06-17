@@ -1,9 +1,122 @@
 
- make.py started: 2018-02-01 20:31:52 /home/ahthomas/Research/benchmark/analysis/figures/src 
+ make.py started: 2018-06-13 19:17:45 /home/ahthomas/Research/benchmark/analysis/figures/src 
 
 
 
 
 Execute:  python  "./figures.py" 
+/home/ahthomas/miniconda2/lib/python2.7/site-packages/matplotlib/scale.py:111: RuntimeWarning: invalid value encountered in less_equal
+  out[a <= 0] = -1000
+/home/ahthomas/miniconda2/lib/python2.7/site-packages/matplotlib/cbook/deprecation.py:106: MatplotlibDeprecationWarning: Adding an axes using the same arguments as a previous axes currently reuses the earlier instance.  In a future version, a new instance will always be created and returned.  Meanwhile, this warning can be suppressed, and the future behavior ensured, by passing a unique label to each axes instance.
+  warnings.warn(message, mplDeprecation, stacklevel=1)
+   nodes  median_madlib_native  min_madlib_native  max_madlib_native  \
+0    1.0            246.067100         243.482522         249.553698   
+1    2.0            122.226117         117.524732         123.556065   
+2    4.0             59.894956          57.774023          61.252557   
+3    8.0             34.199664          33.313970          35.822831   
 
- make.py ended: 2018-02-01 20:32:27
+   median_mllib_native  min_mllib_native  max_mllib_native  \
+0            63.259856         60.329385         68.049505   
+1            52.399622         44.014586         59.298202   
+2            32.810101         19.390100         35.853602   
+3            16.819718         13.950119         19.030977   
+
+   median_systemml_driver_native  min_systemml_driver_native  \
+0                     102.079500                   77.311333   
+1                      80.827500                   63.516667   
+2                      64.875833                   63.852333   
+3                      67.702167                   63.808333   
+
+   max_systemml_driver_native      ...       max_systemml_spark_native  \
+0                  161.659000      ...                      177.032000   
+1                   84.115000      ...                      224.937667   
+2                   66.499333      ...                      268.822333   
+3                   96.817333      ...                      233.215667   
+
+   median_systemml_la  min_systemml_la  max_systemml_la  median_madlib_la  \
+0           22.267000        21.609000        22.925000               NaN   
+1           22.864667        22.680667        23.048667       1428.694646   
+2           22.116833        21.947667        22.286000        769.296232   
+3           22.899000        22.576333        23.221667        475.473533   
+
+   min_madlib_la  max_madlib_la  median_mllib_la  min_mllib_la  max_mllib_la  
+0            NaN            NaN      1608.365160   1525.868640   1674.310506  
+1    1426.401864    1430.242775       859.797852    838.518131    901.355364  
+2     763.195555     780.896771       490.879623    474.471099    508.081887  
+3     448.098205     484.771946       206.816877    198.043963    208.727787  
+
+[4 rows x 22 columns]
+   nodes  median_madlib_native  min_madlib_native  max_madlib_native  \
+0    1.0            206.118214         202.749602         207.689871   
+1    2.0             91.392374          90.361411         101.794080   
+2    4.0             46.537913          45.883251          47.023615   
+3    8.0             28.171679          27.728657          29.077704   
+
+   median_mllib_native  min_mllib_native  max_mllib_native  \
+0            20.325366         12.757770         23.529253   
+1            18.062586         18.026272         19.210923   
+2             6.483706          6.176542          8.103096   
+3             6.650689          6.242489          6.788979   
+
+   median_systemml_driver_native  min_systemml_driver_native  \
+0                       1.704333                    1.639667   
+1                       2.279833                    2.139667   
+2                       1.716500                    1.510667   
+3                       1.740333                    1.563333   
+
+   max_systemml_driver_native      ...       max_systemml_spark_native  \
+0                    2.006667      ...                       17.486333   
+1                    4.287333      ...                       30.766667   
+2                    2.012333      ...                       22.180333   
+3                    1.875333      ...                       26.169000   
+
+   median_systemml_la  min_systemml_la  max_systemml_la  median_madlib_la  \
+0             17.6360           14.576           20.696       2021.214932   
+1             14.9035           12.286           17.521       2003.442338   
+2             18.7295           15.625           21.834       1754.575107   
+3             23.0975           20.872           25.323       1185.469444   
+
+   min_madlib_la  max_madlib_la  median_mllib_la  min_mllib_la  max_mllib_la  
+0    2007.185769    2036.047793      3173.269569   3057.988962   3271.831133  
+1    2003.272935    2003.513915      1550.832031   1500.254649   1858.895211  
+2    1721.861298    1788.329996      1057.913231    994.622086   1119.838684  
+3    1135.060820    1232.035160       486.974537    419.720110    509.990358  
+
+[4 rows x 22 columns]
+   nodes  median_mllib_native  min_mllib_native  max_mllib_native  \
+0    1.0            56.677236         56.040082         60.872274   
+1    2.0            24.376497         22.121409         26.153647   
+2    4.0            12.404681         10.880229         15.219018   
+3    8.0             7.852970          7.513528          8.133507   
+
+   median_systemml_driver_native  min_systemml_driver_native  \
+0                        20.0280                      17.017   
+1                        15.8305                      11.883   
+2                        20.4865                      15.350   
+3                        20.1460                      16.383   
+
+   max_systemml_driver_native  median_systemml_spark_native  \
+0                      21.969                         7.077   
+1                      19.316                         5.062   
+2                      29.078                         3.657   
+3                      21.370                         4.275   
+
+   min_systemml_spark_native  max_systemml_spark_native  median_systemml_la  \
+0                      5.952                      8.618            224.5150   
+1                      4.576                      5.112             93.9840   
+2                      3.190                      4.658            153.2315   
+3                      3.844                      4.716            162.0460   
+
+   min_systemml_la  max_systemml_la  median_mllib_la  min_mllib_la  \
+0          219.331          229.699        40.469573     38.641646   
+1           90.383           97.585         8.504246      8.056486   
+2          127.355          250.026        13.824200     11.366854   
+3          156.704          167.388         9.845541      7.428223   
+
+   max_mllib_la  
+0     41.781250  
+1      9.000126  
+2     33.081694  
+3     11.032857  
+
+ make.py ended: 2018-06-13 19:18:08

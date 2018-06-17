@@ -1,0 +1,80 @@
+[info] Loading project definition from /home/ubuntu/SLAB/tests/MLAlgorithms (Native Implementations)/src/systemml/project
+[info] Set current project to SystemMLAlgs (in build file:/home/ubuntu/SLAB/tests/MLAlgorithms%20(Native%20Implementations)/src/systemml/)
+[info] Including from cache: SystemML.jar
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/DEPENDENCIES' with strategy 'discard'
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.xml' with strategy 'discard'
+[warn] Strategy 'discard' was applied to 6 files
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/MLAlgorithms (Native Implementations)/src/systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar
+[success] Total time: 2 s, completed May 20, 2018 3:48:57 AM
+[info] Loading project definition from /home/ubuntu/SLAB/tests/MLAlgorithms (Native Implementations)/src/mllib/project
+[info] Set current project to MLLibAlgs (in build file:/home/ubuntu/SLAB/tests/MLAlgorithms%20(Native%20Implementations)/src/mllib/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Strategy 'discard' was applied to a file
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/MLAlgorithms (Native Implementations)/src/mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar
+[success] Total time: 2 s, completed May 20, 2018 3:49:05 AM
+199563535
+Test => 0
+71403
+Test => 1
+71403
+Test => 2
+71403
+Test => 3
+71403
+Test => 4
+71403
+199563535
+Test => 0
+71403
+Test => 1
+71403
+Test => 2
+71403
+Test => 3
+71403
+Test => 4
+71403
+199563535
+Test => 0
+Cleared: ../temp
+Cleared: ../external
+
+Start log file:  ../output/make.log
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: spark-submit --class SparkMLAlgorithms 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=reg inputPath=/scratch/adclick_clean_1_sparse.parquet nodes=8 featureNames=features stub=_1
+Running: spark-submit --class SparkMLAlgorithms   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=reg inputPath=/scratch/adclick_clean_1_sparse.parquet nodes=8 featureNames=features stub=_1
+Running: spark-submit --class SparkMLAlgorithms 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=logit inputPath=/scratch/adclick_clean_1_sparse.parquet nodes=8 featureNames=features stub=_1
+Running: spark-submit --class SparkMLAlgorithms   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=logit inputPath=/scratch/adclick_clean_1_sparse.parquet nodes=8 featureNames=features stub=_1
+Running: spark-submit --class SparkMLAlgorithms 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=pca inputPath=/scratch/adclick_clean_1_sparse.parquet nodes=8 featureNames=features stub=_1
+Running: spark-submit --class SparkMLAlgorithms   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=pca inputPath=/scratch/adclick_clean_1_sparse.parquet nodes=8 featureNames=features stub=_1
+
+End log file:  ../output/make.log

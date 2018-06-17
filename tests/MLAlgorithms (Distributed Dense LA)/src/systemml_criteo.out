@@ -1,0 +1,372 @@
+[info] Loading project definition from /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Dense LA)/src/systemml/project
+[info] Set current project to SystemMLAlgs (in build file:/home/ubuntu/SLAB/tests/MLAlgorithms%20(Distributed%20Dense%20LA)/src/systemml/)
+[info] Including from cache: SystemML.jar
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/DEPENDENCIES' with strategy 'discard'
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.xml' with strategy 'discard'
+[warn] Strategy 'discard' was applied to 6 files
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Dense LA)/src/systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar
+[success] Total time: 7 s, completed Apr 25, 2018 6:23:53 AM
+[info] Loading project definition from /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Dense LA)/src/mllib/project
+[info] Set current project to MLLibAlgs (in build file:/home/ubuntu/SLAB/tests/MLAlgorithms%20(Distributed%20Dense%20LA)/src/mllib/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Strategy 'discard' was applied to a file
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Dense LA)/src/mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar
+[success] Total time: 4 s, completed Apr 25, 2018 6:24:09 AM
+-rw-r--r--   1 ubuntu supergroup         77 2018-04-12 04:38 /scratch/pass.csv
+
+Welcome to Apache SystemML!
+
+Running DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ p = sum( X )
+ q = sum( y )
+ print(p)
+ print(q)
+
+ 
+
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if ((p > 0) & (q > 0)) {
+       start = utils::time(1)
+   }
+   tmp = reg(X, y)
+   res = utils::printRandElements(tmp, 10)
+   if ((p > 0) & (q > 0)) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+
+ logit = function(matrix[double] X, 
+                  matrix[double] y, 
+                  Integer iterations)
+     return (matrix[double] w) {
+
+     N = nrow(X)
+     w = matrix(0, rows=ncol(X), cols=1)
+     iteration = 0
+     stepSize = 10
+
+     while (iteration < iterations) {
+         xb = X %*% w
+         delta = 1/(1+exp(-xb)) - y
+         stepSize = stepSize / 2
+         w = w - ((stepSize * t(X) %*% delta)/N)
+
+         iteration = iteration+1
+     }
+ }
+
+ gnmf = function(matrix[double] X, Integer r, Integer iterations)
+     return (integer iteration) {
+     W = rand(rows = nrow(X), cols = r, pdf = 'uniform')
+     H = rand(rows = r, cols = ncol(X), pdf = 'uniform')
+
+     for (i in 1:3) {
+         W = W * ((X %*% t(H)) / (W %*% (H %*% t(H))))
+         H = H * ((t(W) %*% X) / ((t(W) %*% W) %*% H))
+     }
+     if ((as.scalar(W[1,1]) >  0) & (as.scalar(H[1,1]) > 0)) {
+         print(as.scalar(H[1,1]))
+         print(as.scalar(W[1,1]))
+     }
+
+     iteration = 0
+ }
+
+ reg = function(matrix[double] X, matrix[double] y)
+     return (matrix[double] b) {
+     b = solve(t(X) %*% X, t(X) %*% y)
+ }
+
+ robust_se = function(matrix[double] X, 
+                      matrix[double] r2) 
+     return (matrix[double] se) {
+     # NOTE: SVD is cheap since XTX is small!
+     [U,H,V] = svd( t(X) %*% X )
+     h = diag( H )
+     XTX_INV = U %*% diag(h^-1) %*% t(V)
+     S = diag( r2 )
+     se = XTX_INV %*% (t(X) %*% S %*% X) %*% XTX_INV
+ }
+            
+ pca = function(matrix[double] X, Integer k) 
+   return (matrix[double] PRJ) {
+     N = nrow( X )
+     K = ncol( X )
+     XS = X - colMeans( X )
+     S = (1/(N-1))*(t( XS ) %*% XS)
+     [eigvals, eigvects] = eigen( S )
+     
+     # Thanks to the Sysml implementation for this helpful bit 
+     # of code to sort the eigenvectors
+
+     eigssorted = order(target=eigvals,by=1, 
+                        decreasing=TRUE,
+                        index.return=TRUE)
+     diagmat = table(seq(1,K), eigssorted)
+     eigvals = diagmat %*% eigvals
+     eigvects = eigvects %*% diagmat
+     eigvects = eigvects[,1:k]
+
+     PRJ = XS %*% eigvects
+ }
+        
+5.925908667853054E8
+6373290.0
+0.0011567583596293798
+0.005536371163461351
+0.005627004484777532
+9.236129748173456E-4
+0.005536371163461351
+-4.7570673580160335E-4
+0.005627004484777532
+0.005707634636956963
+0.005536371163461351
+9.236129748173456E-4
+0.0011567583596293798
+0.005707634636956963
+2.3213453151749668E-4
+0.0011567583596293798
+2.3213453151749668E-4
+0.0011567583596293798
+2.3213453151749668E-4
+0.0025598335150076885
+-4.7570673580160335E-4
+-4.7570673580160335E-4
+-4.7570673580160335E-4
+0.005707634636956963
+2.3213453151749668E-4
+-2.564123474564065E-4
+0.005536371163461351
+-4.7570673580160335E-4
+0.005707634636956963
+0.005536371163461351
+2.3213453151749668E-4
+9.236129748173456E-4
+0.005536371163461351
+-2.564123474564065E-4
+0.0011567583596293798
+0.0011567583596293798
+0.0011567583596293798
+0.0025598335150076885
+9.236129748173456E-4
+0.0011567583596293798
+0.0025598335150076885
+0.005707634636956963
+0.005627004484777532
+0.005707634636956963
+0.005707634636956963
+0.005536371163461351
+-4.7570673580160335E-4
+0.0025598335150076885
+0.0011567583596293798
+2.3213453151749668E-4
+0.005536371163461351
+-2.564123474564065E-4
+SystemML Statistics:
+Total execution time:		925.347 sec.
+Number of executed Spark inst:	0.
+
+
+Welcome to Apache SystemML!
+
+Running DML: 
+
+ setwd('/home/ubuntu/SLAB/lib/dml')
+ source('utils.dml') as utils
+
+ p = sum( X )
+ q = sum( y )
+ print(p)
+ print(q)
+
+ 
+
+ times = matrix(0.0, rows = 5, cols = 1)
+ for (ix in 1:5) {
+   if ((p > 0) & (q > 0)) {
+       start = utils::time(1)
+   }
+   tmp = logit(X, y, 10)
+   res = utils::printRandElements(tmp, 10)
+   if ((p > 0) & (q > 0)) {
+       stop = utils::time(1)
+   }
+   times[ix,1] = (stop - start) / 1000
+ }
+ times = t(times)
+
+ logit = function(matrix[double] X, 
+                  matrix[double] y, 
+                  Integer iterations)
+     return (matrix[double] w) {
+
+     N = nrow(X)
+     w = matrix(0, rows=ncol(X), cols=1)
+     iteration = 0
+     stepSize = 10
+
+     while (iteration < iterations) {
+         xb = X %*% w
+         delta = 1/(1+exp(-xb)) - y
+         stepSize = stepSize / 2
+         w = w - ((stepSize * t(X) %*% delta)/N)
+
+         iteration = iteration+1
+     }
+ }
+
+ gnmf = function(matrix[double] X, Integer r, Integer iterations)
+     return (integer iteration) {
+     W = rand(rows = nrow(X), cols = r, pdf = 'uniform')
+     H = rand(rows = r, cols = ncol(X), pdf = 'uniform')
+
+     for (i in 1:3) {
+         W = W * ((X %*% t(H)) / (W %*% (H %*% t(H))))
+         H = H * ((t(W) %*% X) / ((t(W) %*% W) %*% H))
+     }
+     if ((as.scalar(W[1,1]) >  0) & (as.scalar(H[1,1]) > 0)) {
+         print(as.scalar(H[1,1]))
+         print(as.scalar(W[1,1]))
+     }
+
+     iteration = 0
+ }
+
+ reg = function(matrix[double] X, matrix[double] y)
+     return (matrix[double] b) {
+     b = solve(t(X) %*% X, t(X) %*% y)
+ }
+
+ robust_se = function(matrix[double] X, 
+                      matrix[double] r2) 
+     return (matrix[double] se) {
+     # NOTE: SVD is cheap since XTX is small!
+     [U,H,V] = svd( t(X) %*% X )
+     h = diag( H )
+     XTX_INV = U %*% diag(h^-1) %*% t(V)
+     S = diag( r2 )
+     se = XTX_INV %*% (t(X) %*% S %*% X) %*% XTX_INV
+ }
+            
+ pca = function(matrix[double] X, Integer k) 
+   return (matrix[double] PRJ) {
+     N = nrow( X )
+     K = ncol( X )
+     XS = X - colMeans( X )
+     S = (1/(N-1))*(t( XS ) %*% XS)
+     [eigvals, eigvects] = eigen( S )
+     
+     # Thanks to the Sysml implementation for this helpful bit 
+     # of code to sort the eigenvectors
+
+     eigssorted = order(target=eigvals,by=1, 
+                        decreasing=TRUE,
+                        index.return=TRUE)
+     diagmat = table(seq(1,K), eigssorted)
+     eigvals = diagmat %*% eigvals
+     eigvects = eigvects %*% diagmat
+     eigvects = eigvects[,1:k]
+
+     PRJ = XS %*% eigvects
+ }
+        
+5.925908667853054E8
+6373290.0
+-0.687327376377663
+-0.189735525958339
+-1.4016027986787651
+-1.4016027986787651
+-1.4016027986787651
+-0.9063487097814007
+-0.480448889709665
+-0.189735525958339
+-1.4016027986787651
+-0.189735525958339
+-1.4158744907388106
+-0.687327376377663
+-0.10865011037888947
+-0.46085425888764286
+-0.480448889709665
+-1.4016027986787651
+-0.189735525958339
+-0.189735525958339
+-0.10865011037888947
+-0.687327376377663
+-0.687327376377663
+-0.46085425888764286
+-0.46085425888764286
+-0.687327376377663
+-1.4016027986787651
+-0.189735525958339
+-0.480448889709665
+-0.480448889709665
+-1.4016027986787651
+-1.4016027986787651
+-1.4016027986787651
+-1.4158744907388106
+-1.4016027986787651
+-0.480448889709665
+-0.1771323347568796
+-1.4158744907388106
+-0.10865011037888947
+-0.46085425888764286
+-0.480448889709665
+-0.46085425888764286
+-0.1771323347568796
+-1.4016027986787651
+-0.10865011037888947
+-1.4158744907388106
+-0.687327376377663
+-1.4158744907388106
+-0.46085425888764286
+-1.4158744907388106
+-0.10865011037888947
+-0.10865011037888947
+SystemML Statistics:
+Total execution time:		1902.299 sec.
+Number of executed Spark inst:	0.
+
+Writing 0 of 1.0 chunks
+WARNING: File exists. No data copied
+Running: spark-submit --class SystemMLMLAlgorithms 
+
+
+ --driver-memory 32G 
+
+  
+./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar mattype=adclick Xpath=/scratch/pass.csv Ypath=/scratch/pass.csv passPath=/scratch/pass.csv dataPath=/scratch/adclick_clean_1_dense.parquet nodes=2 opType=reg
+Running: spark-submit --class SystemMLMLAlgorithms  --driver-memory 32G   ./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar mattype=adclick Xpath=/scratch/pass.csv Ypath=/scratch/pass.csv passPath=/scratch/pass.csv dataPath=/scratch/adclick_clean_1_dense.parquet nodes=2 opType=reg
+Running: spark-submit --class SystemMLMLAlgorithms 
+
+
+ --driver-memory 32G 
+
+  
+./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar mattype=adclick Xpath=/scratch/pass.csv Ypath=/scratch/pass.csv passPath=/scratch/pass.csv dataPath=/scratch/adclick_clean_1_dense.parquet nodes=2 opType=logit
+Running: spark-submit --class SystemMLMLAlgorithms  --driver-memory 32G   ./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar mattype=adclick Xpath=/scratch/pass.csv Ypath=/scratch/pass.csv passPath=/scratch/pass.csv dataPath=/scratch/adclick_clean_1_dense.parquet nodes=2 opType=logit
+Cleared: ../temp
+Cleared: ../external
+
+Start log file:  ../output/make.log
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: python _run_criteo_tests.py _1 2 "SYSTEMML" "reg logit"
+
+End log file:  ../output/make.log

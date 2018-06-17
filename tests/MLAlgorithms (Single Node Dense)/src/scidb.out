@@ -1,0 +1,517 @@
+[....] Starting OpenBSD Secure Shell server: sshd[?25l7[1G[[32m ok [39;49m8[?12l[?25h.
+Starting shim
+shim: SciDB HTTP service started on port(s) 8080,8083s with web root [/var/lib/shim/wwwroot], talking to SciDB on port 1239
+shim: /new_session
+shim: init_session[jy9757]: create pipe, /tmp/shim_generic_pipe_jy9757...
+shim: new_session[jy9757]: scidbconnect [0], user 
+shim: new_session[jy9757]: scidbconnect [1], user 
+shim: new_session[jy9757]: ready, ibuf /tmp/shim_input_buf_vaDrqK, obuf /tmp/shim_output_buf_IYok6E, opipe /tmp/shim_output_pipe_5wFdMz, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list('operators'), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756562570368304
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list('macros'), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756562709490190
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query load_library('dense_linear_algebra')
+shim: execute_query[jy9757]: execute, qid 0.1528756562836155002
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list('operators'), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756562893172037
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list('macros'), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756563018634817
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(show('list(\'instances\')', 'afl'),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756563122374412
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(apply(list('instances'), No, No), No, name, port, instance_id, online_since, instance_path),'/tmp/shim_output_buf_IYok6E',0,'(int64, string, uint16, uint64, string, string)')
+shim: execute_query[jy9757]: execute, qid 0.1528756563228845178
+shim: execute_query[jy9757]: done
+shim: /read_bytes
+shim: read_bytes[jy9757]: return entire buffer
+shim: read_bytes[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756563451386302
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756563688685550
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(build(<val:double>[row=0:10000000:0:1000;col=0:100:0:1000], (RANDOM() % 100) / 10.0), X10000000100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756563858946049
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756727587045283
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756727817920656
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(build(<val:double>[row=0:10000000:0:1000;col=0:0:0:1000], iif(RANDOM() % 100 > 80, 1, 0)), y10000000100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756728044617146
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756730536158501
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756730756856763
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(build(<residuals:double>[row=0:10000000:0:1000;col=0:0:0:1000], (RANDOM() % 100) / 10.0), r210000000100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756731001599602
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(show('dimensions(X10000000100)', 'afl'),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756739505382014
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(apply(dimensions(X10000000100), No, No), No, name, start, length, chunk_interval, chunk_overlap, low, high, type),'/tmp/shim_output_buf_IYok6E',0,'(int64, string, int64, uint64, int64, uint64, int64, int64, string)')
+shim: execute_query[jy9757]: execute, qid 0.1528756739645253032
+shim: execute_query[jy9757]: done
+shim: /read_bytes
+shim: read_bytes[jy9757]: return entire buffer
+shim: read_bytes[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756739972416466
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z100100<val:double>[row=0:100:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756740174441853
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756740238313567
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z10010000000<val:double>[row=0:10000000:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756740443589385
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528756740509344791
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z1000000010000000<val:double>[row=0:100:0:1000;col=0:10000000:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756740714791479
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query store(gemm(X10000000100, X10000000100, Z100100, transa:true), XTX)
+shim: execute_query[jy9757]: execute, qid 0.1528756740797593323
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), Z100100), XTX_INV)        
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756826326784398
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join(X10000000100 as X, r210000000100 as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:10000000:0:1000;col=0:100:0:1000]))
+            , gemm(X10000000100, XTX_INV, Z10010000000), Z100100), Z100100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528756830140404940
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(show('dimensions(X10000000100)', 'afl'),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757323201175285
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(apply(dimensions(X10000000100), No, No), No, name, start, length, chunk_interval, chunk_overlap, low, high, type),'/tmp/shim_output_buf_IYok6E',0,'(int64, string, int64, uint64, int64, uint64, int64, int64, string)')
+shim: execute_query[jy9757]: execute, qid 0.1528757323364858962
+shim: execute_query[jy9757]: done
+shim: /read_bytes
+shim: read_bytes[jy9757]: return entire buffer
+shim: read_bytes[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757323742630629
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z100100)
+shim: execute_query[jy9757]: execute, qid 0.1528757323990491192
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z100100<val:double>[row=0:100:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757325680585075
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757325769780677
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z10010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528757325986853345
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z10010000000<val:double>[row=0:10000000:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757326647487319
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757326718424449
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z1000000010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528757326925640978
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z1000000010000000<val:double>[row=0:100:0:1000;col=0:10000000:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757329128416871
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query store(gemm(X10000000100, X10000000100, Z100100, transa:true), XTX)
+shim: execute_query[jy9757]: execute, qid 0.1528757329200999686
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), Z100100), XTX_INV)        
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757419757557528
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join(X10000000100 as X, r210000000100 as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:10000000:0:1000;col=0:100:0:1000]))
+            , gemm(X10000000100, XTX_INV, Z10010000000), Z100100), Z100100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757423764296702
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(show('dimensions(X10000000100)', 'afl'),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757877522408218
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(apply(dimensions(X10000000100), No, No), No, name, start, length, chunk_interval, chunk_overlap, low, high, type),'/tmp/shim_output_buf_IYok6E',0,'(int64, string, int64, uint64, int64, uint64, int64, int64, string)')
+shim: execute_query[jy9757]: execute, qid 0.1528757877682482365
+shim: execute_query[jy9757]: done
+shim: /read_bytes
+shim: read_bytes[jy9757]: return entire buffer
+shim: read_bytes[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757878039047675
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z100100)
+shim: execute_query[jy9757]: execute, qid 0.1528757878260770006
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z100100<val:double>[row=0:100:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757880175683650
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757880265323372
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z10010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528757880489119282
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z10010000000<val:double>[row=0:10000000:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757881072536128
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528757881146424021
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z1000000010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528757881359792914
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z1000000010000000<val:double>[row=0:100:0:1000;col=0:10000000:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757884206265035
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query store(gemm(X10000000100, X10000000100, Z100100, transa:true), XTX)
+shim: execute_query[jy9757]: execute, qid 0.1528757884286971368
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), Z100100), XTX_INV)        
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757975949034994
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join(X10000000100 as X, r210000000100 as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:10000000:0:1000;col=0:100:0:1000]))
+            , gemm(X10000000100, XTX_INV, Z10010000000), Z100100), Z100100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528757980079499130
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(show('dimensions(X10000000100)', 'afl'),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758436524456697
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(apply(dimensions(X10000000100), No, No), No, name, start, length, chunk_interval, chunk_overlap, low, high, type),'/tmp/shim_output_buf_IYok6E',0,'(int64, string, int64, uint64, int64, uint64, int64, int64, string)')
+shim: execute_query[jy9757]: execute, qid 0.1528758436682295835
+shim: execute_query[jy9757]: done
+shim: /read_bytes
+shim: read_bytes[jy9757]: return entire buffer
+shim: read_bytes[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758437055970239
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z100100)
+shim: execute_query[jy9757]: execute, qid 0.1528758437277722153
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z100100<val:double>[row=0:100:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528758439207526265
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758439319136264
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z10010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528758439533327644
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z10010000000<val:double>[row=0:10000000:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528758440143797933
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758440359898245
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z1000000010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528758440592357872
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z1000000010000000<val:double>[row=0:100:0:1000;col=0:10000000:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528758442884495783
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query store(gemm(X10000000100, X10000000100, Z100100, transa:true), XTX)
+shim: execute_query[jy9757]: execute, qid 0.1528758442974597879
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), Z100100), XTX_INV)        
+    
+shim: execute_query[jy9757]: execute, qid 0.1528758532288795932
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join(X10000000100 as X, r210000000100 as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:10000000:0:1000;col=0:100:0:1000]))
+            , gemm(X10000000100, XTX_INV, Z10010000000), Z100100), Z100100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528758536416546734
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(show('dimensions(X10000000100)', 'afl'),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758994907924319
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(apply(dimensions(X10000000100), No, No), No, name, start, length, chunk_interval, chunk_overlap, low, high, type),'/tmp/shim_output_buf_IYok6E',0,'(int64, string, int64, uint64, int64, uint64, int64, int64, string)')
+shim: execute_query[jy9757]: execute, qid 0.1528758995065800290
+shim: execute_query[jy9757]: done
+shim: /read_bytes
+shim: read_bytes[jy9757]: return entire buffer
+shim: read_bytes[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758995410238506
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z100100)
+shim: execute_query[jy9757]: execute, qid 0.1528758995614111227
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z100100<val:double>[row=0:100:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528758997831953428
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758997931113891
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z10010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528758998179299969
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z10010000000<val:double>[row=0:10000000:0:1000;col=0:100:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528758998847274907
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query save(project(list(), name),'/tmp/shim_output_buf_IYok6E',0,'tsv')
+shim: execute_query[jy9757]: execute, qid 0.1528758998922133087
+shim: execute_query[jy9757]: done
+shim: /read_lines
+shim: read_lines[jy9757]: return entire buffer
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query remove(Z1000000010000000)
+shim: execute_query[jy9757]: execute, qid 0.1528758999151202032
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        CREATE ARRAY Z1000000010000000<val:double>[row=0:100:0:1000;col=0:10000000:0:1000]
+    
+shim: execute_query[jy9757]: execute, qid 0.1528759001167867538
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query store(gemm(X10000000100, X10000000100, Z100100, transa:true), XTX)
+shim: execute_query[jy9757]: execute, qid 0.1528759001245274573
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), Z100100), XTX_INV)        
+    
+shim: execute_query[jy9757]: execute, qid 0.1528759090850784919
+shim: execute_query[jy9757]: done
+shim: /execute_query
+shim: execute_query[jy9757]: execute, scidb[0] 0x7ff2e8043e20, scidb[1] 0x7ff2e80450c0, query 
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join(X10000000100 as X, r210000000100 as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:10000000:0:1000;col=0:100:0:1000]))
+            , gemm(X10000000100, XTX_INV, Z10010000000), Z100100), Z100100)
+    
+shim: execute_query[jy9757]: execute, qid 0.1528759094965707813
+shim: execute_query[jy9757]: done
+shim: /release_session
+shim: release_session[jy9757]: disconnecting
+shim: cleanup_session[jy9757]: releasing
+shim: cleanup_session[jy9757]: unlinking ibuf 0x7ff2e8040dc0
+shim: cleanup_session[jy9757]: unlinking obuf 0x7ff2e8041dd0
+shim: cleanup_session[jy9757]: unlinking opipe 0x7ff2e8042de0

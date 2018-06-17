@@ -45,13 +45,13 @@ makelog = '../../output/make.log'
 utils.run_sbt('./systemml', makelog = makelog)
 utils.run_sbt('./mllib',  makelog = makelog)
 
-utils.run_pbdR(program='R_pipelines.R')
+#utils.run_pbdR(program='R_pipelines.R')
 utils.run_spark(program='SparkPipelines',
                 sbt_dir='./mllib',
                 cmd_args='')
-utils.run_spark(program='SystemMLPipelines',
-               sbt_dir='./systemml',
-               cmd_args='')
+#utils.run_spark(program='SystemMLPipelines',
+#               sbt_dir='./systemml',
+#               cmd_args='')
 
 remove_dir('scratch_space')
 

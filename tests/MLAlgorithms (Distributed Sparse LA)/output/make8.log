@@ -1,5 +1,5 @@
 
- make.py started: 2018-01-31 21:01:34 /home/ubuntu/benchmark/tests/MLAlgorithms (Distributed Sparse LA)/src 
+ make.py started: 2018-05-21 23:45:45 /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Sparse LA)/src 
 
 
 name := "SystemMLAlgs"
@@ -71,6 +71,17 @@ Running: sbt -Dsbt.log.noformat=true assembly
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import sys
 
@@ -81,82 +92,100 @@ import gen_data as data
 
 stub = sys.argv[1]
 nodes = sys.argv[2]
-algorithms = sys.argv[3].split(' ')
-systems = sys.argv[4].split(' ')
-sparsity = sys.argv[5].split(' ')
-ncols = sys.argv[6].split(' ')
+systems = sys.argv[3].split(' ')
+algorithms = sys.argv[4].split(' ')
 
-args_madlib = ('mattype=tall '
-               'xTableName=M_{sr}{ncol}_sparse_tall '
-               'yTableName=y100_sparse '
-               'nodes={nodes} opType={op} ncol={ncol} sr={sr}')
-args_hdfs = ('mattype=tall '
-             'Xpath=/scratch/M_{sr}{ncol}_sparse_tall.mtx '
-             'Ypath=/scratch/y100_sparse.csv '
+data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
+utils.hdfs_put('../temp/pass.csv')
+
+args_madlib = ('mattype=adclick '
+               'xTableName=adclick_clean_indepvars_long '
+               'yTableName=adclick_clean_y '
+               'nodes={nodes} opType={op}')
+args_hdfs = ('mattype=adclick '
+             'Xpath=/scratch/pass.csv '
+             'Ypath=/scratch/pass.csv '
              'passPath=/scratch/pass.csv '
-             'nodes={nodes} opType={op} ncol={ncol} sr={sr}')
+             'dataPath=/scratch/adclick_clean{stub}_sparse.parquet '
+             'nodes={nodes} opType={op}')
 
-for sr in sparsity:
-    for alg in algorithms:
-        for nc in ncols:
-            argv = {'nodes': nodes, 'op': alg, 'sr': sr, 'ncol': nc}
-            cmd_args_hdfs = args_hdfs.format(**argv)
-            cmd_args_madlib = args_madlib.format(**argv)
+for alg in algorithms:
+    argv = {'stub': stub,
+            'nodes': nodes,
+            'op': alg}
 
-            if 'SYSTEMML' in systems:
-                utils.run_spark(program='SystemMLMLAlgorithms',
-                                sbt_dir='./systemml',
-                                driver_memory='64G',
-                                cmd_args=cmd_args_hdfs)
-            if 'MLLIB' in systems:
-                utils.run_spark(program='SparkMLAlgorithms',
-                                sbt_dir='./mllib',
-                                driver_memory='64G',
-                                cmd_args=cmd_args_hdfs)
-            if 'MADLIB' in systems:
-                utils.run_python(program='madlib_algs.py', 
-                                 cmd_args=cmd_args_madlib)
+    cmd_args_hdfs = args_hdfs.format(**argv)
 
-Running: python _run_scale_tests.py _1 8 "robust" "MLLIB" "1" 100
+    if 'SYSTEMML' in systems:
+        utils.run_spark(program='SystemMLMLAlgorithms',
+                        sbt_dir='./systemml',
+                        driver_memory='80G',
+                        cmd_args=cmd_args_hdfs)
+    if 'MLLIB' in systems:
+        utils.run_spark(program='SparkMLAlgorithms',
+                        sbt_dir='./mllib',
+                        driver_memory='20G',
+                        cmd_args=cmd_args_hdfs)
+    if 'MADLIB' in systems:
+        print 'MADLib Tests Not Implemented for Sparse Criteo'
+    #    utils.run_python(program='madlib_bigmat_algs.py', 
+    #                     cmd_args=cmd_args_madlib)
+
+Running: python _run_criteo_tests.py _1 8 "SYSTEMML" "pca"
 
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-./mllib/src/main/scala/spark_ml_algs.scala
+./systemml/src/main/scala/systemml_ml_algorithms.scala
 ================================================================================
+// Copyright 2018 Anthony H Thomas and Arun Kumar
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 import scala.math._
 import java.nio.file.{Paths, Files}
+import org.apache.sysml.api.mlcontext._
+import org.apache.sysml.api.mlcontext.ScriptFactory._
+import org.apache.sysml.api.mlcontext.MatrixFormat._
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
-import org.apache.spark.rdd._
-import breeze.{math => bMath,
+import scala.io.Source
+import breeze.{math => bMath, 
                numerics => bNum,
                linalg => bAlg}
 import breeze.linalg.{Vector => bVector,
                       Matrix => bMatrix,
-                      SparseVector => bSparseVector,
+                      SparseVector => bSparseVector, 
                       DenseVector => bDenseVector,
                       CSCMatrix => bSparseMatrix,
                       DenseMatrix => bDenseMatrix}
-import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import org.apache.spark.ml.{linalg => alg}
-import org.apache.spark.mllib.random.RandomRDDs._
-import org.apache.spark.mllib.linalg.distributed._
 import org.apache.spark.sql._
+import org.apache.spark.sql.types._
 import scala.tools.nsc.io._
-import scala.io.Source
-import java.util.Random
 import scala.collection.immutable._
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.ml.{linalg => alg}
+import org.apache.spark.mllib.{linalg => malg}
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.ml.linalg.SQLDataTypes.VectorType
 
-object SparkMLAlgorithms {
-    def main(args: Array[String]) {
+object SystemMLMLAlgorithms extends App {
+
+    override def main(args: Array[String]) {
         val conf = new SparkConf().setAppName("MLLibMatrixOps")
         val sc = new SparkContext(conf)
+        val ml = new MLContext(sc)
+        ml.setExplain(true)
+        ml.setExplainLevel(MLContext.ExplainLevel.RUNTIME)
         val spark = SparkSession.builder.getOrCreate()
-
         val root = sys.env("BENCHMARK_PROJECT_ROOT")
 
         val argMap = Map[String,String](
@@ -172,84 +201,177 @@ object SparkMLAlgorithms {
         val nodes = argMap("nodes")
         val mattype = argMap("mattype")
         val dataPath = argMap.get("dataPath")
-
-        val stub = "/tests/MLAlgorithms (Distributed Sparse LA)/output/"
-        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
-        val path = root + stub + base
-
-        if (!Files.exists(Paths.get(path))) {
-          File(path).writeAll("nodes,time1,time2,time3,time4,time5\n")
-        }
+        val sr = argMap.get("sr")
+        val ncol = argMap.get("ncol")
 
         val (x, y) = dataPath match {
-            case Some(path) => parquet_to_bmm(path, spark)
-            case None => (readSMM(Xpath, sc), readMM(Ypath, sc))
+            case Some(path) => readParquet(path, spark)
+            case None => (readSMM(Xpath, sc, spark),
+                          readMM(Ypath, spark))
         }
 
-        // BlockMatrix.toIndexedRowMatrix does not correctly preserve dimensions
-        val (xir, yir) = opType match {
-            case "reg" | "robust" => (x.toCoordinateMatrix.toIndexedRowMatrix, 
-                                      y.toCoordinateMatrix.toIndexedRowMatrix)
-            case _     => (empty_IRM(sc), empty_IRM(sc))
-        }
-        xir.rows.persist(MEMORY_AND_DISK_SER)
-        yir.rows.persist(MEMORY_AND_DISK_SER)
-
-        val r2 = random_matrix(xir.numRows.toInt, 1, 100, 1, sc).toIndexedRowMatrix
-
-        val xr : RowMatrix = opType match {
-            case "pca" => x.toIndexedRowMatrix.toRowMatrix
-            case _     => empty_IRM(sc).toRowMatrix
-        }
-        xr.rows.persist(MEMORY_AND_DISK_SER)
-        xr.rows.count
-
-        val times = Array[Double](0,0,0,0,0)
-        for (ix <- 0 to 4) {
-            println(s"Test => ${ix}")
-            val start = System.nanoTime()
-
-            if (opType == "logit")
-                logit(x, y, 3, sc)
-            if (opType == "gnmf")
-                gnmf(x, 10, 3, sc)
-            if (opType == "reg")
-                reg(xir, yir)
-            if (opType == "robust")
-                robust_se(xir, r2)
-            if (opType == "pca")
-                pca(xr, 5)
-
-            val stop = System.nanoTime()
-            times(ix) = (stop - start)/1e9
+        val pathname = dataPath match {
+            case Some(path) => path
+            case None => Xpath
         }
 
-        File(path).appendAll(
-            nodes + "," + times.mkString(",") + "\n")
-    }
+        val isSparse = pathname.contains("sparse")
+        val stub = "/tests/MLAlgorithms (Distributed Sparse LA)/output/"
+        val base = s"systemml_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+        if (!File(path).exists) {
+            File(path).writeAll("nodes,sr,ncol,time1,time2,time3,time4,time5\n")
+        }
 
-    def empty_IRM(sc: SparkContext) : IndexedRowMatrix = {
-        val CMM = new CoordinateMatrix(
-            sc.parallelize(Seq(new MatrixEntry(1,1,1)))
-        )
-        return CMM.toIndexedRowMatrix()
-    }
+        val meta_stub = dataPath match {
+            case Some(path) => "data/Criteo (Build Derived Tables)"
+            case None => "data/SimpleMatrixOps (Sparse Data)"
+        }
 
-    def readSMM(path: String, sc: SparkContext) : BlockMatrix = {
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
-        val meta_name = path.split("/").last
-        val meta_path = s"${root}/data/SimpleMatrixOps (Sparse Data)/output/${meta_name}.mtd"
+        val meta_name = dataPath match {
+            case Some(path) => pathname.split("/").last.replace("parquet","csv")
+            case None => pathname.split("/").last
+        }
+
+        val meta_path = s"${root}/${meta_stub}/output/${meta_name}.mtd"
         val (rows, cols, nnz) = parse_meta(meta_path)
+        val x_meta = new MatrixMetadata(DF_VECTOR, rows, cols, nnz)
+        val y_meta = new MatrixMetadata(DF_DOUBLES, rows, 1, nnz)
 
-        val M = sc.textFile(path, 1000).zipWithIndex().filter(tup => tup._2 > 2).
-            map(tup => tup._1.trim.split(" ")).
-            map(row => new MatrixEntry(row(0).toLong-1,
-                                       row(1).toLong-1,
-                                       row(2).toDouble))
-        val BM = new CoordinateMatrix(M, rows, cols).toBlockMatrix(100,100)
-        BM.persist(MEMORY_AND_DISK_SER)
-        println(BM.blocks.count)
-        return BM
+        val call = opType match {
+            case "logit"  => "logit(X, y, 10)"
+            case "gnmf"   => "gnmf(X, 10, 10)"
+            case "reg"    => "reg(X, y)"
+            case "robust" => "robust_se(X, r2)"
+            case "pca"    => "pca(X, 5)"
+            case _        => throw new Exception("Invalid Operator")
+        }
+
+        val print_op = opType match {
+           case "gnmf" => ""
+           case _      => "res = utils::printRandElements(tmp, 10)"
+        }
+
+        val preprocess_string = opType match {
+            case "robust" => s"r2 = rand(rows=${rows},cols=1,pdf='normal')"
+            case _        => ""
+        }
+
+        val libDir = root + "/lib/dml"
+        val dmlText =
+          s"""
+            | setwd('${libDir}')
+            | source('utils.dml') as utils
+            |
+            | p = sum( X )
+            | q = sum( y )
+            | print(p)
+            | print(q)
+            |
+            | ${preprocess_string}
+            |
+            | times = matrix(0.0, rows = 5, cols = 1)
+            | for (ix in 1:5) {
+            |   if ((p != 0) & (q != 0)) {
+            |       start = utils::time(1)
+            |   }
+            |   tmp = ${call}
+            |   if ((p != 0) & (q != 0)) {
+            |       ${print_op}
+            |       stop = utils::time(1)
+            |   }
+            |   times[ix,1] = (stop - start) / 1000
+            | }
+            | times = t(times)
+            |
+            | logit = function(matrix[double] X, 
+            |                  matrix[double] y, 
+            |                  Integer iterations)
+            |     return (matrix[double] w) {
+            |
+            |     N = nrow(X)
+            |     w = matrix(0, rows=ncol(X), cols=1)
+            |     iteration = 0
+            |     stepSize = 10
+            |
+            |     while (iteration < iterations) {
+            |         xb = X %*% w
+            |         delta = 1/(1+exp(-xb)) - y
+            |         stepSize = stepSize / 2
+            |         w = w - ((stepSize * t(X) %*% delta)/N)
+            |
+            |         iteration = iteration+1
+            |     }
+            | }
+            |
+            | gnmf = function(matrix[double] X, Integer r, Integer iterations)
+            |     return (integer iteration) {
+            |     W = rand(rows = nrow(X), cols = r, pdf = 'uniform')
+            |     H = rand(rows = r, cols = ncol(X), pdf = 'uniform')
+            |
+            |     for (i in 1:3) {
+            |         W = W * ((X %*% t(H)) / (W %*% (H %*% t(H))))
+            |         H = H * ((t(W) %*% X) / ((t(W) %*% W) %*% H))
+            |     }
+            |     if ((as.scalar(W[1,1]) >  0) & (as.scalar(H[1,1]) > 0)) {
+            |         print(as.scalar(H[1,1]))
+            |         print(as.scalar(W[1,1]))
+            |     }
+            |
+            |     iteration = 0
+            | }
+            |
+            | reg = function(matrix[double] X, matrix[double] y)
+            |     return (matrix[double] b) {
+            |     # ensure XTX is nonsingular
+            |     T = 0.001*diag( matrix( 1, rows=ncol(X), cols=1 ) )
+            |     XTX = (t(X) %*% X) + (t(T) %*% T)
+            |     b = solve(XTX, t(X) %*% y)
+            | }
+            |
+            | robust_se = function(matrix[double] X, 
+            |                      matrix[double] r2) 
+            |     return (matrix[double] se) {
+            |     # NOTE: SVD is cheap since XTX is small!
+            |     [U,H,V] = svd( t(X) %*% X )
+            |     h = diag( H )
+            |     XTX_INV = U %*% diag(h^-1) %*% t(V)
+            |     S = diag( r2 )
+            |     se = XTX_INV %*% (t(X) %*% S %*% X) %*% XTX_INV
+            | }
+            |
+            | pca = function(matrix[double] X, Integer k) 
+            |   return (matrix[double] PRJ) {
+            |     N = nrow( X )
+            |     K = ncol( X )
+            |     XS = X - colMeans( X )
+            |     S = (1/(N-1))*(t( XS ) %*% XS)
+            |     [eigvals, eigvects] = eigen( S )
+            |     
+            |     # Thanks to the Sysml implementation for this helpful bit 
+            |     # of code to sort the eigenvectors
+            |
+            |     eigssorted = order(target=eigvals,by=1, 
+            |                        decreasing=TRUE,
+            |                        index.return=TRUE)
+            |     diagmat = table(seq(1,K), eigssorted)
+            |     eigvals = diagmat %*% eigvals
+            |     eigvects = eigvects %*% diagmat
+            |     eigvects = eigvects[,1:k]
+            |
+            |     PRJ = XS %*% eigvects
+            | }
+        """.stripMargin
+        println("Running DML: ")
+        println(dmlText)
+        val script = dml(dmlText).in(Seq(("X", x, x_meta),
+                                         ("y", y, y_meta))).out("times")
+        val res = ml.execute(script)
+        val results = res.getTuple[Matrix]("times")._1.to2DDoubleArray
+
+        val prefix = Array(nodes, sr, ncol)
+        File(path).appendAll(
+            prefix.mkString(",") + "," + results(0).mkString(",") + '\n')
     }
 
     def parse_meta(path: String) : (Long, Long, Long) = {
@@ -264,264 +386,46 @@ object SparkMLAlgorithms {
                 meta("\"nnz\"").toLong)
     }
 
-    def readMM(path: String, sc: SparkContext) : BlockMatrix = {
-        val M = sc.textFile(path, 1000).zipWithIndex().
-                         map(
-                            tup => new IndexedRow(
-                                tup._2.toInt,
-                                new DenseVector(tup._1.split(",").
-                                    map(_.toDouble))))
-        val IRM = new IndexedRowMatrix(M)
-        val BM = IRM.toBlockMatrix(100,IRM.numCols.toInt)
-        BM.persist(MEMORY_AND_DISK_SER)
-        println(BM.blocks.count)
-        return BM
-    }
+    def readSMM(path: String, 
+                sc: SparkContext,
+                spark: SparkSession) : DataFrame = {
 
-    def parquet_to_bmm(path: String, spark: SparkSession) :
-        (BlockMatrix, BlockMatrix) = {
-        println("READING PARQUET")
-        val df = spark.read.parquet(path).repartition(1000)
+        val schema = StructType(Seq(StructField("_c0", VectorType)))
+        val M = sc.textFile(path, 500).
+                   zipWithIndex().filter(tup => tup._2 > 2).
+                   map(tup => tup._1.trim.split(" ")).
+                   map(row => new MatrixEntry(
+                       row(0).toLong, row(1).toLong, row(2).toDouble))
+        val RM = new CoordinateMatrix( M ).toRowMatrix()
+        val df = spark.createDataFrame(RM.rows.map(x => Row(x.asML)), schema)
         df.persist(MEMORY_AND_DISK_SER)
-
-        val X_rows = df.select("features").rdd.zipWithIndex().
-            map(tup => new IndexedRow(
-                tup._2.toInt, SparseVector.fromML(
-                    tup._1.getAs[alg.Vector](0).toSparse)))
-        val X = new IndexedRowMatrix(X_rows).toBlockMatrix(100,100)
-        X.persist(MEMORY_AND_DISK_SER)
-        println(X.blocks.count)
-        println("NUM PARTITIONS")
-        println(X.blocks.getNumPartitions)
-
-        val y_rows = df.select("y").rdd.zipWithIndex().
-            map(tup => new IndexedRow(tup._2.toInt,
-                                      Vectors.dense(tup._1.getAs[Int](0)).
-                                      toSparse))
-        val y = new IndexedRowMatrix(y_rows).toBlockMatrix(100,1)
-        y.persist(MEMORY_AND_DISK_SER)
-        println(y.blocks.count)
-        return (X, y)
+        df.count
+        return df
     }
 
-    def logit(X: BlockMatrix, y: BlockMatrix,
-              max_iter: Int = 3, sc: SparkContext) : BlockMatrix = {
-
-        println("--------> LOGIT <---------")
-        var iteration = 0
-        var step_size = 0.001
-        val N = X.numRows.toInt
-        val K = X.numCols.toInt
-        var w = random_matrix(K, 1, X.rowsPerBlock, X.colsPerBlock, sc)
-        val XT = X.transpose
-        XT.persist(MEMORY_AND_DISK_SER)
-
-        while (iteration < max_iter) {
-            println( s"Test => ${iteration}" )
-            val xb = X.multiply( w )
-            val gg = new BlockMatrix(xb.blocks.map({
-                case ((x,y), mat) => (
-                        (x,y), from_breeze(
-                    bNum.sigmoid( to_dense( as_breeze( mat ) ) ) )
-                )
-            }), X.rowsPerBlock, X.colsPerBlock)
-            val eps = gg.subtract( y )
-            val w_update = scalar_multiply((step_size/N.toDouble),
-                XT.multiply( eps, 500 ) ) 
-            w = w.subtract( w_update )
-            step_size /= 2.0
-            iteration += 1
-        }
-
-        return w
+    def readMM(path: String, spark: SparkSession) : DataFrame = {
+        val M = spark.read.option("header", false).
+            option("inferSchema",true).csv(path).repartition(1000)
+        M.persist(MEMORY_AND_DISK_SER)
+        M.count
+        return M
     }
 
-    // Spark annoyingly does not expose any of these primitive methods
-    // which makes their library not very useful
-    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
-        case v: linalg.SparseVector =>
-            return new bSparseVector[Double](v.indices, v.values, v.size)
-        case v: linalg.DenseVector  =>
-            return new bDenseVector[Double](v.values)
+    def readParquet(path: String, spark: SparkSession) : (DataFrame, DataFrame) = {
+        val M = spark.read.parquet(path).repartition(1000).sample(true, 0.00001)
+        M.persist(MEMORY_AND_DISK_SER)
+
+        val X = M.select("features")
+        val y = M.select("y")
+        return (X,y)
     }
 
-    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
-        case v: bSparseVector[Double] =>
-            return Vectors.sparse(v.length, v.activeIterator.toSeq)
-        case v: bDenseVector[Double] =>
-            return Vectors.dense(v.data)
-    }
-
-    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
-        case m: linalg.DenseMatrix =>
-            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-        case m: linalg.SparseMatrix =>
-            return new bSparseMatrix(
-                m.values, m.numRows, m.numCols,
-                m.colPtrs, m.numActives, m.rowIndices)
-    }
-
-    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
-        case m: bDenseMatrix[Double] =>
-            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
-        case m: bSparseMatrix[Double] =>
-            return Matrices.sparse(m.rows, m.cols,
-                    m.colPtrs, m.rowIndices, m.data)
-    }
-
-    def elem_subtract(A: IndexedRowMatrix,
-                      B: IndexedRowMatrix) : IndexedRowMatrix = {
-        val both = join_row_matrices(A,B)
-        val AB = both.map(tup => new IndexedRow(tup._1,
-            from_breeze(as_breeze(tup._2._1) :- as_breeze(tup._2._2)))
-        )
-        return new IndexedRowMatrix(AB, A.numRows.toInt, A.numCols.toInt)
-    }
-
-    def join_row_matrices(A: IndexedRowMatrix,
-                          B: IndexedRowMatrix) :
-            RDD[(Long, (linalg.Vector,linalg.Vector))] = {
-        val pair_A = A.rows.map(row => (row.index, row.vector))
-        val pair_B = B.rows.map(row => (row.index, row.vector))
-        return pair_A.join(pair_B)
-    }
-
-    def scalar_multiply(v: Double, M: IndexedRowMatrix) : IndexedRowMatrix = {
-        val rows_rdd = M.rows.map(row => new IndexedRow(row.index,
-                from_breeze(v*as_breeze(row.vector))))
-        return new IndexedRowMatrix(rows_rdd)
-    }
-
-    def scalar_multiply(v: Double, M: BlockMatrix) : BlockMatrix = {
-        return new BlockMatrix(M.blocks.map({
-            case ((x,y), mat) => ((x,y), from_breeze(v*as_breeze(mat)))
-        }), M.rowsPerBlock, M.colsPerBlock)
-    }
-
-    def reg(X: IndexedRowMatrix, y: IndexedRowMatrix) : Matrix = {
-        // here we use Tikhonov regularization to ensure the sparse system is nonsingular
-        println("--------> REG <---------")
-
-        val XTX = X.computeGramianMatrix()
-        val XTY = X.toBlockMatrix(100,100).transpose.multiply(
-                      y.toBlockMatrix(100,1), 500).toLocalMatrix
-        val T = to_sparse( as_breeze( Matrices.speye( XTX.numCols.toInt ) ) ):*0.001
-        val b = from_breeze( (( to_dense( as_breeze( XTX ) ) + (T.t * T)) \
-                               as_breeze( XTY ).toDenseMatrix.
-                                                toDenseVector ).toDenseMatrix )
-        return b.transpose
-    }
-
-    def to_dense(M: bMatrix[Double]) : bDenseMatrix[Double] = {
-        return M.asInstanceOf[bDenseMatrix[Double]]
-    }
-
-    def to_sparse(M: bMatrix[Double]) : bSparseMatrix[Double] = {
-        return M.asInstanceOf[bSparseMatrix[Double]]
-    }
-
-    def robust_se(X: IndexedRowMatrix, r2: IndexedRowMatrix) : Matrix = {
-        println("--------> ROBUST <---------")
-
-        val XTX_INV = from_breeze( bAlg.inv(
-            to_dense( as_breeze( X.computeGramianMatrix() ) ) )
-        ).asInstanceOf[DenseMatrix]
-        val XB = X.toBlockMatrix(100,100)
-        val S = diagonalize( r2 )
-        val SW = XB.transpose.multiply( S, 500 ).multiply( XB, 500 ).toLocalMatrix
-        return XTX_INV.multiply( SW.asInstanceOf[DenseMatrix] ).multiply( XTX_INV )
-    }
-
-    def pca(X: RowMatrix, k: Int) : RowMatrix = {
-        val S = X.computeCovariance()
-        val eigs = bAlg.eigSym( to_dense( as_breeze( S ) ) )
-        val ixs = bAlg.argsort(eigs.eigenvalues).reverse.slice(0,k)
-        val U = from_breeze( eigs.eigenvectors(::,ixs).toDenseMatrix )
-        val PRJ = X.multiply( U ) // note: we really should subtract the mean...
-        return PRJ
-    }
-
-    def elem_pow(M: IndexedRowMatrix, v: Double) : IndexedRowMatrix = {
-        val rows_rdd = M.rows.map(row => new IndexedRow(row.index,
-                from_breeze(bNum.pow(as_breeze(row.vector), v))))
-        return new IndexedRowMatrix(rows_rdd, M.numRows.toInt, M.numCols.toInt)
-    }
-
-    // converts a distributed vector (as an IRM) to a sparse BlockMatrix
-    def diagonalize(M: IndexedRowMatrix) : BlockMatrix = {
-        val elements = M.rows.map(row =>
-            new MatrixEntry(row.index,
-                            row.index,
-                            row.vector.toArray(0)))
-        return new CoordinateMatrix(
-            elements, M.numRows.toInt, M.numRows.toInt).toBlockMatrix(100,100)
-    }
-
-    def gnmf(X: BlockMatrix, r: Int, max_iter: Int, sc: SparkContext) :
-            (BlockMatrix, BlockMatrix) = {
-
-        val RNG = new Random()
-        val N = X.numRows.toInt
-        val K = X.numCols.toInt
-        var W = random_matrix(N, r, X.rowsPerBlock, X.colsPerBlock, sc)
-        var H = random_matrix(r, K, X.rowsPerBlock, X.colsPerBlock, sc)
-
-        println("--------> GNMF <---------")
-
-        W.blocks.persist(MEMORY_AND_DISK_SER)
-        H.blocks.persist(MEMORY_AND_DISK_SER)
-
-        var iteration = 0
-        while (iteration < max_iter) {
-            println(s"Iteration => ${iteration}")
-            W = elem_multiply(W, elem_divide( X.multiply( H.transpose, 500 ),
-                              W.multiply( H.multiply( H.transpose, 500 ), 500)))
-            H = elem_multiply(H, elem_divide( W.transpose.multiply( X, 500 ),
-                              (W.transpose.multiply( W, 500 ).multiply( H, 500 )) ))
-            iteration = iteration + 1
-        }
-
-        return (W, H)
-    }
-
-    def random_matrix(N: Int, K: Int,
-                      r: Int, c: Int, sc: SparkContext) : BlockMatrix = {
-        val MM = new IndexedRowMatrix(
-            normalVectorRDD(sc, N.toLong, K).
-                repartition(1000).zipWithIndex().map(
-                tup => new IndexedRow(tup._2, tup._1))).toBlockMatrix(r, c)
-        return new BlockMatrix( MM.blocks.map(
-            {case ((x,y), mat) => ((x,y),
-             mat.asInstanceOf[SparseMatrix])}), r, c)
-    }
-
-    def join_block_matrices(A: BlockMatrix,
-                            B: BlockMatrix) :
-            RDD[((Int, Int), (linalg.Matrix,linalg.Matrix))] = {
-        val pair_A = A.blocks.map(block => block)
-        val pair_B = B.blocks.map(block => block)
-        return pair_A.join(pair_B)
-    }
-
-    def elem_divide(A: BlockMatrix, B: BlockMatrix) : BlockMatrix = {
-        val both = join_block_matrices( A, B )
-        val new_blocks = both.map(block => ((block._1._1, block._1._2),
-            from_breeze( as_breeze( block._2._1 ) :/ as_breeze( block._2._1 ))))
-        return new BlockMatrix(new_blocks, A.rowsPerBlock, B.rowsPerBlock)
-    }
-
-    def elem_multiply(A: BlockMatrix, B: BlockMatrix) : BlockMatrix = {
-        val both = join_block_matrices( A, B )
-        val new_blocks = both.map(block => (block._1,
-            from_breeze( as_breeze( block._2._1 ) :* as_breeze( block._2._1 ))))
-        return new BlockMatrix(new_blocks, A.rowsPerBlock, B.rowsPerBlock)
-    }
 }
 
-Running: spark-submit --class SparkMLAlgorithms  --driver-memory 64G   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar mattype=tall Xpath=/scratch/M_1100_sparse_tall.mtx Ypath=/scratch/y100_sparse.csv passPath=/scratch/pass.csv nodes=8 opType=robust ncol=100 sr=1
+Running: spark-submit --class SystemMLMLAlgorithms  --driver-memory 80G   ./systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar mattype=adclick Xpath=/scratch/pass.csv Ypath=/scratch/pass.csv passPath=/scratch/pass.csv dataPath=/scratch/adclick_clean_1_sparse.parquet nodes=8 opType=pca
 
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
 
- make.py ended: 2018-02-01 03:13:06
+ make.py ended: 2018-05-21 23:55:46

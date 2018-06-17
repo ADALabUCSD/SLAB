@@ -1,5 +1,5 @@
 
- make.py started: 2018-01-31 20:36:25 /home/ubuntu/benchmark/tests/MLAlgorithms (Distributed Dense LA)/src 
+ make.py started: 2018-06-11 06:05:58 /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Dense LA)/src 
 
 
 name := "SystemMLAlgs"
@@ -72,6 +72,17 @@ Running: sbt -Dsbt.log.noformat=true assembly
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import sys
 
@@ -86,8 +97,8 @@ msize = sys.argv[3].split(' ')
 algorithms = sys.argv[4].split(' ')
 systems = sys.argv[5].split(' ')
 
-data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
-utils.hdfs_put('../temp/pass.csv')
+#data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
+#utils.hdfs_put('../temp/pass.csv')
 
 args_R = ('mattype=tall '
           'Xpath=../external/disk_data/M{gb}_tall.csv '
@@ -133,655 +144,1110 @@ for gb in msize:
         if 'MADLIB' in systems:
             utils.run_python(program='madlib_algs.py', 
                              cmd_args=cmd_args_madlib)
+        if 'SCIDB' in systems:
+            utils.run_python(program='scidb_algs.py', 
+                             cmd_args=cmd_args_madlib)
 
-Running: python _run_scale_tests.py _1 8 "2 4 8 16" "robust" "R"
-
-CPU count capped at: None
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT, quietly=TRUE))
-suppressMessages(library(pbdMPI, quietly=TRUE))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
-
-init.grid()
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Xpath <- argList[['Xpath']]
-Ypath <- argList[['Ypath']]
-nodes <- argList[['nodes']]
-dataPath <- argList[['dataPath']]
-
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
-
-alloc_binary_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M > .83)
-}
-
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
-
-    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
-    iteration <- 1
-    stepSize <- 10
-
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
-
-        iteration <- iteration+1
-    }
-
-    return(w)
-}
-
-gnmf <- function(X, r, iterations=3) {
-    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
-    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
-
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
-    }
-
-    return(list(W,H))
-}
-
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
-
-robust_se <- function(X, r2) {
-    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
-
-pca <- function(X) {
-    N <- nrow( X )
-    XS <- sweep(X, 2, colMeans(X))
-    S <- (1/(N-1)) * (crossprod( XS ))
-    eigs <- eigen( S )
-
-    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
-    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
-    # do this though using the tools provided by pbdR! This doesn't really matter
-    # for performance but is important for accuracy.
-
-    PRJ <- XS %*% eigs$values[,1:k]
-    return(PRJ)
-}
-
-X <- alloc_matrix(Xpath)
-y <- alloc_binary_matrix(Ypath)
-
-rows <- nrow(X)
-cols <- ncol(X)
-
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
-
-times <- rep(0,5)
-
-b <- NULL
-if (opType == 'robust') {
-    b <- reg(X, y)
-    y_hat <- X %*% b
-    s <- sum(y_hat)
-    r2 <- t(y - y_hat)^2
-}
-
-for (ix in 1:5) {
-    comm.print("START")
-    barrier()
-    a <- Sys.time()
-
-    if (opType == 'logit') {
-        logitReg(X, y)
-    } else if (opType == 'gnmf') {
-        gnmf(X, 10)
-    } else if (opType == 'reg') {
-        reg(X, y)
-    } else if (opType == 'robust') {
-        robust_se(X, r2)
-    }
-
-    comm.print('AT BARRIER')
-    barrier()
-    b <- Sys.time()
-    times[ix] <- as.numeric(b-a, units="secs")
-    comm.print('STOP')
-}
-
-if (comm.rank() == 0) {
-    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
-
-    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    runTimes[1,'nodes'] <- nodes
-    runTimes[1,c('rows','cols')] <- c(rows,cols)
-    runTimes[1,4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-finalize()
-
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M2_tall.csv Ypath=../external/disk_data/y2_tall.csv nodes=8 opType=robust
+Running: python _run_scale_tests.py _1 8 "2 4 8 16" "robust" "SCIDB"
 
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT, quietly=TRUE))
-suppressMessages(library(pbdMPI, quietly=TRUE))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-init.grid()
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import json
+import scidbpy
+import subprocess
 
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
+import numpy as np
+import pandas as pd
 
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Xpath <- argList[['Xpath']]
-Ypath <- argList[['Ypath']]
-nodes <- argList[['nodes']]
-dataPath <- argList[['dataPath']]
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
 
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
+sys.path.append(os.path.join(ROOT,'lib','python'))
+import np_timing_utils as utils
 
-alloc_binary_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M > .83)
-}
+def main(kwargs):
+    op_type  = kwargs.get('opType')
+    nodes = kwargs.get('nodes')
+    x_table_name = kwargs.get('xTableName')
 
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
+    nrow, ncol = get_dims(x_table_name)
 
-    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
-    iteration <- 1
-    stepSize <- 10
+    path = '../output/scidb_{}{}.txt'.format(op_type, nodes)
+    colnames = ['nodes','rows','cols','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
 
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
 
-        iteration <- iteration+1
+    env = {
+        'cxn': cxn, 
+        'reg': reg,
+        'logit': logit,
+        'gnmf': gnmf,
+        'robust_se': robust_se
     }
 
-    return(w)
-}
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
 
-gnmf <- function(X, r, iterations=3) {
-    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
-    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
+    run_times.loc[:,['nodes','rows','cols']] = (nodes, nrow, ncol)
+    run_times.loc[:,3:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
 
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
-    }
+def get_dims(name):
+    with open('../external/disk_data/{}.csv.mtd'.format(name), 'rb') as fh:
+        res = json.load(fh)
+    return (res['rows'], res['cols'])
 
-    return(list(W,H))
-}
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
+    # materialize the inner produce matrix
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
 
-robust_se <- function(X, r2) {
-    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    stmt = """
+        gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z})
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    cxn.iquery(stmt)
 
-pca <- function(X) {
-    N <- nrow( X )
-    XS <- sweep(X, 2, colMeans(X))
-    S <- (1/(N-1)) * (crossprod( XS ))
-    eigs <- eigen( S )
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
 
-    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
-    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
-    # do this though using the tools provided by pbdR! This doesn't really matter
-    # for performance but is important for accuracy.
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
-    PRJ <- XS %*% eigs$values[,1:k]
-    return(PRJ)
-}
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
+        iteration += 1
 
-X <- alloc_matrix(Xpath)
-y <- alloc_binary_matrix(Ypath)
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-rows <- nrow(X)
-cols <- ncol(X)
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
 
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
 
-times <- rep(0,5)
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
 
-b <- NULL
-if (opType == 'robust') {
-    b <- reg(X, y)
-    y_hat <- X %*% b
-    s <- sum(y_hat)
-    r2 <- t(y - y_hat)^2
-}
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
 
-for (ix in 1:5) {
-    comm.print("START")
-    barrier()
-    a <- Sys.time()
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
 
-    if (opType == 'logit') {
-        logitReg(X, y)
-    } else if (opType == 'gnmf') {
-        gnmf(X, 10)
-    } else if (opType == 'reg') {
-        reg(X, y)
-    } else if (opType == 'robust') {
-        robust_se(X, r2)
-    }
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
 
-    comm.print('AT BARRIER')
-    barrier()
-    b <- Sys.time()
-    times[ix] <- as.numeric(b-a, units="secs")
-    comm.print('STOP')
-}
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
 
-if (comm.rank() == 0) {
-    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb: true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb: true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
 
-    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa: true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa: true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
 
-    runTimes[1,'nodes'] <- nodes
-    runTimes[1,c('rows','cols')] <- c(rows,cols)
-    runTimes[1,4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
+        iteration += 1
 
-finalize()
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
 
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M4_tall.csv Ypath=../external/disk_data/y4_tall.csv nodes=8 opType=robust
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+if __name__=='__main__':
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
+
+Running: python _scidb_algs.py mattype=tall xTableName=M2_tall yTableName=y2_tall nodes=8 opType=robust
 
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT, quietly=TRUE))
-suppressMessages(library(pbdMPI, quietly=TRUE))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-init.grid()
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import json
+import scidbpy
+import subprocess
 
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
+import numpy as np
+import pandas as pd
 
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Xpath <- argList[['Xpath']]
-Ypath <- argList[['Ypath']]
-nodes <- argList[['nodes']]
-dataPath <- argList[['dataPath']]
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
 
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
+sys.path.append(os.path.join(ROOT,'lib','python'))
+import np_timing_utils as utils
 
-alloc_binary_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M > .83)
-}
+def main(kwargs):
+    op_type  = kwargs.get('opType')
+    nodes = kwargs.get('nodes')
+    x_table_name = kwargs.get('xTableName')
 
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
+    nrow, ncol = get_dims(x_table_name)
 
-    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
-    iteration <- 1
-    stepSize <- 10
+    path = '../output/scidb_{}{}.txt'.format(op_type, nodes)
+    colnames = ['nodes','rows','cols','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
 
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
 
-        iteration <- iteration+1
+    env = {
+        'cxn': cxn, 
+        'reg': reg,
+        'logit': logit,
+        'gnmf': gnmf,
+        'robust_se': robust_se
     }
 
-    return(w)
-}
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
 
-gnmf <- function(X, r, iterations=3) {
-    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
-    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
+    run_times.loc[:,['nodes','rows','cols']] = (nodes, nrow, ncol)
+    run_times.loc[:,3:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
 
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
-    }
+def get_dims(name):
+    with open('../external/disk_data/{}.csv.mtd'.format(name), 'rb') as fh:
+        res = json.load(fh)
+    return (res['rows'], res['cols'])
 
-    return(list(W,H))
-}
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
+    # materialize the inner produce matrix
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
 
-robust_se <- function(X, r2) {
-    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    stmt = """
+        gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z})
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    cxn.iquery(stmt)
 
-pca <- function(X) {
-    N <- nrow( X )
-    XS <- sweep(X, 2, colMeans(X))
-    S <- (1/(N-1)) * (crossprod( XS ))
-    eigs <- eigen( S )
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
 
-    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
-    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
-    # do this though using the tools provided by pbdR! This doesn't really matter
-    # for performance but is important for accuracy.
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
-    PRJ <- XS %*% eigs$values[,1:k]
-    return(PRJ)
-}
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
+        iteration += 1
 
-X <- alloc_matrix(Xpath)
-y <- alloc_binary_matrix(Ypath)
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-rows <- nrow(X)
-cols <- ncol(X)
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
 
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
 
-times <- rep(0,5)
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
 
-b <- NULL
-if (opType == 'robust') {
-    b <- reg(X, y)
-    y_hat <- X %*% b
-    s <- sum(y_hat)
-    r2 <- t(y - y_hat)^2
-}
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
 
-for (ix in 1:5) {
-    comm.print("START")
-    barrier()
-    a <- Sys.time()
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
 
-    if (opType == 'logit') {
-        logitReg(X, y)
-    } else if (opType == 'gnmf') {
-        gnmf(X, 10)
-    } else if (opType == 'reg') {
-        reg(X, y)
-    } else if (opType == 'robust') {
-        robust_se(X, r2)
-    }
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
 
-    comm.print('AT BARRIER')
-    barrier()
-    b <- Sys.time()
-    times[ix] <- as.numeric(b-a, units="secs")
-    comm.print('STOP')
-}
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
 
-if (comm.rank() == 0) {
-    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb: true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb: true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
 
-    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa: true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa: true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
 
-    runTimes[1,'nodes'] <- nodes
-    runTimes[1,c('rows','cols')] <- c(rows,cols)
-    runTimes[1,4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
+        iteration += 1
 
-finalize()
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
 
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M8_tall.csv Ypath=../external/disk_data/y8_tall.csv nodes=8 opType=robust
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+if __name__=='__main__':
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
+
+Running: python _scidb_algs.py mattype=tall xTableName=M4_tall yTableName=y4_tall nodes=8 opType=robust
 
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT, quietly=TRUE))
-suppressMessages(library(pbdMPI, quietly=TRUE))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-init.grid()
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import json
+import scidbpy
+import subprocess
 
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- suppressMessages(parseCMDArg(arg))
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
+import numpy as np
+import pandas as pd
 
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Xpath <- argList[['Xpath']]
-Ypath <- argList[['Ypath']]
-nodes <- argList[['nodes']]
-dataPath <- argList[['dataPath']]
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
 
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
+sys.path.append(os.path.join(ROOT,'lib','python'))
+import np_timing_utils as utils
 
-alloc_binary_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('runif', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M > .83)
-}
+def main(kwargs):
+    op_type  = kwargs.get('opType')
+    nodes = kwargs.get('nodes')
+    x_table_name = kwargs.get('xTableName')
 
-logitReg <- function(X, y, iterations=3) {
-    N <- nrow(X)
+    nrow, ncol = get_dims(x_table_name)
 
-    w <- ddmatrix('rnorm', nrow=ncol(X), ncol=1, bldim=bldim(X))
-    iteration <- 1
-    stepSize <- 10
+    path = '../output/scidb_{}{}.txt'.format(op_type, nodes)
+    colnames = ['nodes','rows','cols','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
 
-    while (iteration < iterations) {
-        xb <- X %*% w
-        delta <- y - 1/(1+exp(-xb))
-        stepSize <- stepSize / 2
-        w <- w + ((stepSize*crossprod(X, delta))/N)
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
 
-        iteration <- iteration+1
+    env = {
+        'cxn': cxn, 
+        'reg': reg,
+        'logit': logit,
+        'gnmf': gnmf,
+        'robust_se': robust_se
     }
 
-    return(w)
-}
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
 
-gnmf <- function(X, r, iterations=3) {
-    W <- ddmatrix('rnorm', nrow=nrow(X), ncol=r, bldim=bldim(X))
-    H <- ddmatrix('rnorm', nrow=r, ncol=ncol(X), bldim=bldim(X))
+    run_times.loc[:,['nodes','rows','cols']] = (nodes, nrow, ncol)
+    run_times.loc[:,3:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
 
-    iteration <- 0
-    while (iteration < iterations) {
-        W <- W * ((X %*% t(H)) / (W %*% tcrossprod(H,H)))
-        H <- H * ((t(W) %*% X) / (crossprod(W,W) %*% H))
-        iteration <- iteration + 1
+def get_dims(name):
+    with open('../external/disk_data/{}.csv.mtd'.format(name), 'rb') as fh:
+        res = json.load(fh)
+    return (res['rows'], res['cols'])
+
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
+
+    # materialize the inner produce matrix
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    stmt = """
+        gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z})
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    cxn.iquery(stmt)
+
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
+
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
+
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
+        iteration += 1
+
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
+
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
+
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
+
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
+
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
+
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
+
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
+
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
+
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb: true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb: true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
+
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa: true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa: true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
+
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
+        iteration += 1
+
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
+
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+if __name__=='__main__':
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
+
+Running: python _scidb_algs.py mattype=tall xTableName=M8_tall yTableName=y8_tall nodes=8 opType=robust
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import json
+import scidbpy
+import subprocess
+
+import numpy as np
+import pandas as pd
+
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
+
+sys.path.append(os.path.join(ROOT,'lib','python'))
+import np_timing_utils as utils
+
+def main(kwargs):
+    op_type  = kwargs.get('opType')
+    nodes = kwargs.get('nodes')
+    x_table_name = kwargs.get('xTableName')
+
+    nrow, ncol = get_dims(x_table_name)
+
+    path = '../output/scidb_{}{}.txt'.format(op_type, nodes)
+    colnames = ['nodes','rows','cols','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    cxn = scidbpy.connect()
+    cxn.iquery("load_library('dense_linear_algebra')")
+
+    env = {
+        'cxn': cxn, 
+        'reg': reg,
+        'logit': logit,
+        'gnmf': gnmf,
+        'robust_se': robust_se
     }
 
-    return(list(W,H))
-}
+    alloc_matrix(nrow, ncol, 'X{}{}'.format(nrow, ncol), cxn, overwrite=False)
+    alloc_matrix(nrow, 0, 'y{}{}'.format(nrow, ncol), cxn,
+        overwrite=False, binary=True)
+    if op_type == 'reg':
+        call = "reg('X{0}{1}', 'y{0}{1}', cxn)".format(nrow, ncol)
+    elif op_type == 'logit':
+        alloc_matrix(nrow, 0, 'y{}{}b'.format(nrow, ncol), 
+            cxn, overwrite=False, binary=True)
+        call = "logit('X{0}{1}', 'y{0}{1}b', cxn)".format(nrow, ncol)
+    elif op_type == 'gnmf':
+        call = "gnmf('X{0}{1}', 10, cxn)".format(nrow, ncol)
+    elif op_type == 'robust':
+        alloc_matrix(nrow, 0, 'r2{}{}'.format(nrow, ncol), 
+            cxn, overwrite=True, val_name='residuals')
+        call = "robust_se('X{0}{1}', 'r2{0}{1}', cxn)".format(nrow, ncol)
 
-reg <- function(X, y) {
-    b <- solve(t(X) %*% X, t(X) %*% y)
-    return(b)
-}
+    run_times.loc[:,['nodes','rows','cols']] = (nodes, nrow, ncol)
+    run_times.loc[:,3:] = utils.timeOp(call, env)
+    write_header = not os.path.exists(path)
+    run_times.to_csv(path, index=False, header=write_header, mode='a')
 
-robust_se <- function(X, r2) {
-    S <- sweep(t( X ), MARGIN=1, STATS=as.vector(r2), FUN='*')
-    XTX_INV <- solve( crossprod( X ) )
-    se <- XTX_INV %*% (S %*% X) %*% XTX_INV
-    return(se)
-}
+def get_dims(name):
+    with open('../external/disk_data/{}.csv.mtd'.format(name), 'rb') as fh:
+        res = json.load(fh)
+    return (res['rows'], res['cols'])
 
-pca <- function(X) {
-    N <- nrow( X )
-    XS <- sweep(X, 2, colMeans(X))
-    S <- (1/(N-1)) * (crossprod( XS ))
-    eigs <- eigen( S )
+def reg(X_table_name, y_table_name, cxn):
+    # We need to explicitly form the inverse using SVD since SciDB does not
+    # provide an inversion operator nor does it provide an operator to solve
+    # a linear system
+    
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zname, cxn)
 
-    # NOTE: IMPORTANT ISSUE: The eigenvectors need to be sorted by their values
-    # ScaLAPACK is -not- guaranteed to do this internally. It's not clear how to
-    # do this though using the tools provided by pbdR! This doesn't really matter
-    # for performance but is important for accuracy.
+    # materialize the inner produce matrix
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zname))
+    
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zname)
+    print stmt
+    cxn.iquery(stmt)
 
-    PRJ <- XS %*% eigs$values[,1:k]
-    return(PRJ)
-}
+    # now do the thing
+    zname = 'Z{}1'.format(K)
+    zeros(K, 0, zname, cxn)
+    stmt = """
+        gemm(XTX_INV, gemm({X}, {y}, {Z}, transa:true), {Z})
+    """.format(X=X_table_name, y=y_table_name, Z=zname)
+    print stmt
+    cxn.iquery(stmt)
 
-X <- alloc_matrix(Xpath)
-y <- alloc_binary_matrix(Ypath)
+def logit(X_table_name, y_table_name, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    alloc_matrix(K, 0, 'w', cxn, overwrite=True)
+    alloc_matrix(K, 0, 'ZK', cxn, method=0, overwrite=True)
+    alloc_matrix(N, 0, 'ZN', cxn, method=0, overwrite=True)
 
-rows <- nrow(X)
-cols <- ncol(X)
+    logit_iter = """
+        store(
+            project(
+            apply(join(w, project(
+            apply(
+            gemm({X},
+            project(apply(
+                join(gemm({X}, w, ZN), {y}), delta, val - pow(1+EXP(-gemm),-1)), 
+            delta), ZK, transa:true), norm, 0.001*gemm/{N}), norm)
+        ), update, val+norm), update), w_new)
+    """.format(X=X_table_name, y=y_table_name, N=N)
 
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(logit_iter)
+        cxn.iquery('remove(w)')
+        cxn.iquery('store(project(apply(w_new, val, update), val), w)')
+        iteration += 1
 
-times <- rep(0,5)
+def robust_se(X_table_name, r2_table_name, cxn):
+    temp_tables = ['XTX','XTX_INV']
+    for t in temp_tables:
+        safe_drop(t, cxn)
+    
+    N,K = get_shape(X_table_name, cxn)
+    zkkname = 'Z{0}{0}'.format(K)
+    zeros(K, K, zkkname, cxn)
 
-b <- NULL
-if (opType == 'robust') {
-    b <- reg(X, y)
-    y_hat <- X %*% b
-    s <- sum(y_hat)
-    r2 <- t(y - y_hat)^2
-}
+    znkname = 'Z{}{}'.format(K,N)
+    zeros(N, K, znkname, cxn)
 
-for (ix in 1:5) {
-    comm.print("START")
-    barrier()
-    a <- Sys.time()
+    zknname = 'Z{}{}'.format(N,N)
+    zeros(K, N, zknname, cxn)
 
-    if (opType == 'logit') {
-        logitReg(X, y)
-    } else if (opType == 'gnmf') {
-        gnmf(X, 10)
-    } else if (opType == 'reg') {
-        reg(X, y)
-    } else if (opType == 'robust') {
-        robust_se(X, r2)
-    }
+    # materialize the inner produce matrix
+    print 'store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname)
+    cxn.iquery('store(gemm({X}, {X}, {Z}, transa:true), XTX)'.format(
+        X=X_table_name, Z=zkkname))
 
-    comm.print('AT BARRIER')
-    barrier()
-    b <- Sys.time()
-    times[ix] <- as.numeric(b-a, units="secs")
-    comm.print('STOP')
-}
+    # compute the inverse of XTX
+    stmt = """
+        store(gemm(project(apply(cross_join(transpose(gesvd(XTX, 'VT')) as V, 
+            project(apply(
+                    gesvd(XTX, 'S'), sigma_inv, POW(sigma,-1)), sigma_inv) 
+                AS SINV, V.i, SINV.i), vsinv, v*sigma_inv), vsinv), 
+            transpose(gesvd(XTX, 'U')), {Z}), XTX_INV)        
+    """.format(Z=zkkname)
+    print stmt
+    cxn.iquery(stmt)
 
-if (comm.rank() == 0) {
-    path <- paste('../output/R_', mattype, '_', opType, nodes, '.txt', sep='')
+    # now compute the sandwich se = (XTX)^{1} x XT x diag(r2) x X x (XTX^{-1})
+    stmt = """
+        gemm(XTX_INV, gemm(transpose(redimension(project(apply(
+                cross_join({X} as X, {r2} as r2, X.row, r2.row),
+         XR2, residuals*val), XR2), <XR2:double>[row=0:{N}:0:1000;col=0:{K}:0:1000]))
+            , gemm({X}, XTX_INV, {ZNK}), {ZKK}), {ZKK})
+    """.format(X=X_table_name, r2=r2_table_name,
+               ZKK=zkkname, ZNK=znkname, N=N, K=K)
+    print stmt
+    cxn.iquery(stmt)
 
-    colnames <- c('nodes','rows','cols','time1','time2','time3','time4','time5')
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
+def gnmf(X_table_name, r, cxn, iterations=3):
+    N,K = get_shape(X_table_name, cxn)
+    
+    alloc_matrix(N, r, 'W_old', cxn, overwrite=True)
+    alloc_matrix(r, K, 'H_old', cxn, overwrite=True)
 
-    runTimes[1,'nodes'] <- nodes
-    runTimes[1,c('rows','cols')] <- c(rows,cols)
-    runTimes[1,4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
+    # no actual data is allocated for zeros creation
+    zeros(N, r, 'ZXHT', cxn, overwrite=True)
+    zeros(r, r, 'ZHHT', cxn, overwrite=True)
+    zeros(N, r, 'ZWHHT', cxn, overwrite=True)
+    zeros(r, K, 'ZWTX', cxn, overwrite=True)
+    zeros(r, r, 'ZWTW', cxn, overwrite=True)
+    zeros(r, K, 'ZWTWH', cxn, overwrite=True)
 
-finalize()
+    build_new_W = """
+        store(project(apply(project(apply(join(W_old,
+            project(apply(join(
+                project(apply(gemm({X}, H_old, ZXHT, transb: true), prod, gemm), prod),
+                gemm(W_old, gemm(H_old, H_old, ZHHT, transb: true), ZWHHT)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), W_new)
+    """.format(X=X_table_name)
 
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript ml_algs.R mattype=tall Xpath=../external/disk_data/M16_tall.csv Ypath=../external/disk_data/y16_tall.csv nodes=8 opType=robust
+    build_new_H = """
+        store(project(apply(project(apply(join(H_old,
+            project(apply(join(
+                project(apply(gemm(W_old, {X}, ZWTX, transa: true), prod, gemm), prod),
+                gemm(gemm(W_old, W_old, ZWTW, transa: true), H_old, ZWTWH)),
+            div, prod/gemm), div)),
+        val_new, val*div), val_new), val, val_new), val), H_new)
+    """.format(X=X_table_name)
+
+    iteration = 0
+    while iteration < iterations:
+        print 'Iteration: {}'.format(iteration)
+        cxn.iquery(build_new_W)
+        cxn.iquery('remove(W_old)')
+        cxn.iquery('rename(W_new, W_old)')
+        cxn.iquery(build_new_H)
+        cxn.iquery('remove(H_old)')
+        cxn.iquery('rename(H_new, H_old)')
+        iteration += 1
+
+def safe_drop(name, cxn):
+    if name in dir(cxn):
+        cxn.iquery('remove({})'.format(name))
+
+def get_shape(name, cxn):
+    dims = cxn.iquery('dimensions({})'.format(name), fetch=True)
+    N = dims.loc[0,'high']
+    K = dims.loc[1,'high']
+    return (N,K)
+
+def alloc_matrix(rows, cols, name, cxn, 
+        method='(RANDOM() % 100) / 10.0',
+        overwrite=False, val_name='val',
+        binary=False, chunksize=1000):
+    if (name in dir(cxn.arrays)) and (overwrite is False):
+        return
+    elif name in dir(cxn.arrays):
+        cxn.iquery('remove({})'.format(name))
+    
+    if binary is True:
+        method = 'iif(RANDOM() % 100 > 80, 1, 0)'
+    stmt = """
+        store(build(<{vn}:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(
+        vn=val_name, r=rows, c=cols, m=method, n=name, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    print stmt
+    cxn.iquery(stmt)
+
+if __name__=='__main__':
+    argv = utils.parse_cmd_args(sys.argv[1:])
+    main(argv)
+
+Running: python _scidb_algs.py mattype=tall xTableName=M16_tall yTableName=y16_tall nodes=8 opType=robust
 
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
 
- make.py ended: 2018-01-31 20:48:54
+ make.py ended: 2018-06-11 08:10:15

@@ -23,8 +23,8 @@ msize = sys.argv[3].split(' ')
 algorithms = sys.argv[4].split(' ')
 systems = sys.argv[5].split(' ')
 
-data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
-utils.hdfs_put('../temp/pass.csv')
+#data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
+#utils.hdfs_put('../temp/pass.csv')
 
 args_R = ('mattype=tall '
           'Xpath=../external/disk_data/M{gb}_tall.csv '
@@ -69,4 +69,7 @@ for gb in msize:
                             cmd_args=cmd_args_hdfs)
         if 'MADLIB' in systems:
             utils.run_python(program='madlib_algs.py', 
+                             cmd_args=cmd_args_madlib)
+        if 'SCIDB' in systems:
+            utils.run_python(program='scidb_algs.py', 
                              cmd_args=cmd_args_madlib)

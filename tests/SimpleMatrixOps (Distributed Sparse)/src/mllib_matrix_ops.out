@@ -1,0 +1,296 @@
+[info] Loading project definition from /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/systemml/project
+[info] Set current project to SystemMLMatrixOps (in build file:/home/ubuntu/SLAB/tests/SimpleMatrixOps%20(Distributed%20Sparse)/src/systemml/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Including from cache: SystemML.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/DEPENDENCIES' with strategy 'discard'
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.xml' with strategy 'discard'
+[warn] Strategy 'discard' was applied to 6 files
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/systemml/target/scala-2.10/SystemMLMatrixOps-assembly-0.1.jar
+[success] Total time: 4 s, completed May 5, 2018 1:20:48 AM
+[info] Loading project definition from /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/mllib/project
+[info] Set current project to MLLibMatrixops (in build file:/home/ubuntu/SLAB/tests/SimpleMatrixOps%20(Distributed%20Sparse)/src/mllib/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Strategy 'discard' was applied to a file
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/SimpleMatrixOps (Distributed Sparse)/src/mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar
+[success] Total time: 2 s, completed May 5, 2018 1:20:56 AM
+-rw-r--r--   1 ubuntu supergroup         76 2018-05-05 00:57 /scratch/pass.csv
+101 125000001
+101 125000001
+101 125000001
+101 125000001
+101 125000001
+1243758
+Writing 0 of 1.0 chunks
+WARNING: File exists. No data copied
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TRANS mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=101 125000001
+11894703
+101 125000001
+78033464
+101 125000001
+124994341
+101 125000001
+1243758
+645.3639420778925
+645.3639420778926
+645.3639420778925
+645.3639420778925
+645.3639420778928
+101 125000001
+11894703
+2042.1909113699671
+2042.1909113699671
+2042.1909113699671
+2042.1909113699664
+2042.1909113699671
+101 125000001
+78033464
+6612.07817341887
+6612.078173418868
+6612.078173418867
+6612.07817341887
+6612.0781734188695
+100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=MVM mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: 101 125000001
+124994341
+21164.550209253317
+21164.550209253313
+21164.550209253317
+21164.55020925332
+21164.55020925332
+101 125000001
+1243758
+101 125000001
+11894703
+101 125000001
+78033464
+101 125000001
+124994341
+spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=NORM mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=TSM mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/sca101 125000001
+101 125000001
+1243758
+101 125000001
+101 125000001
+11894703
+101 125000001
+101 125000001
+78033464
+101 125000001
+101 125000001
+124994341
+125000001 101
+101 125000001
+125000001 101
+101 125000001
+la-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_0001100_sparse_tall.mtx Npath=/scratch/N_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_tall.mtx tableStub=_0001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_001100_sparse_tall.mtx Npath=/scratch/N_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_tall.mtx tableStub=_001100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_01100_sparse_tall.mtx Npath=/scratch/N_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_tall.mtx tableStub=_01100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=ADD mattype=tall Mpath=/scratch/M_1100_sparse_tall.mtx Npath=/scratch/N_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_tall.mtx tableStub=_1100_sparse_tall nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_0001100_sparse_wide.mtx Npath=/scratch/M_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_wide.mtx tableStub=_0001100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_0001100_sparse_wide.mtx Npath=/scratch/M_0001100_sparse_tall.mtx wPath=/scratch/w_0001100_sparse_wide.mtx tableStub=_0001100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=0001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_001100_sparse_wide.mtx Npath=/scratch/M_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_wide.mtx tableStub=_001100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_001100_sparse_wide.mtx Npath=/scratch/M_001100_sparse_tall.mtx wPath=/scratch/w_001100_sparse_wide.mtx tableStub=_001100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=001  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.ja125000001 101
+101 125000001
+125000001 101
+101 125000001
+r opType=GMM mattype=wide Mpath=/scratch/M_01100_sparse_wide.mtx Npath=/scratch/M_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_wide.mtx tableStub=_01100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_01100_sparse_wide.mtx Npath=/scratch/M_01100_sparse_tall.mtx wPath=/scratch/w_01100_sparse_wide.mtx tableStub=_01100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=01  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps 
+
+
+
+
+  
+./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_1100_sparse_wide.mtx Npath=/scratch/M_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_wide.mtx tableStub=_1100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Running: spark-submit --class SparkMatrixOps   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=GMM mattype=wide Mpath=/scratch/M_1100_sparse_wide.mtx Npath=/scratch/M_1100_sparse_tall.mtx wPath=/scratch/w_1100_sparse_wide.mtx tableStub=_1100_sparse_wide nodes=8 passPath=/scratch/pass.csv savestub=100 sr=1  outdir=../output/scale_mat_size
+Cleared: ../temp
+Cleared: ../external
+
+Start log file:  ../output/make.log
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: python _msize_scaling_tests.py 8 "0001 001 01 1" "MLLIB" "TRANS MVM NORM TSM ADD GMM" 100
+
+End log file:  ../output/make.log

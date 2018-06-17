@@ -39,7 +39,7 @@ cmd_args = ('opType={opType} mattype={mattype}'
             ' outdir=../output/scale_mat_size')
 
 data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
-utils.hdfs_put('../temp/pass.csv')
+#utils.hdfs_put('../temp/pass.csv')
 
 gb = sparse_gb
 for op in op_types:
@@ -90,6 +90,10 @@ for op in op_types:
                             cmd_args = args_hdfs)
         if ('MADLIB' in systems) and (op != 'MVM'):
             utils.run_python(program = 'madlib_matrix_ops.py',
+                             cmd_args = args_disk)
+
+        if 'SCIDB' in systems:
+            utils.run_python(program = 'scidb_matrix_ops.py',
                              cmd_args = args_disk)
 
 # stop logging

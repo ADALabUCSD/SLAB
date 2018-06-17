@@ -1,5 +1,5 @@
 
- make.py started: 2018-01-05 01:42:50 /home/ubuntu/benchmark/tests/Decompositions (Distributed Dense)/src 
+ make.py started: 2018-05-17 05:09:04 /home/ubuntu/SLAB/tests/Decompositions (Distributed Dense)/src 
 
 
 name := "SystemMLMatrixOps"
@@ -72,6 +72,17 @@ Running: sbt -Dsbt.log.noformat=true assembly
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import sys
 import shutil
@@ -141,350 +152,466 @@ for op in ops:
           utils.run_pbdR(program = 'R_matrix_ops.R',
                 cmd_args = args_disk)
 
-Running: python _msize_scaling_tests.py 8 "2 4 8 16" "R"
-
-CPU count capped at: None
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT))
-suppressMessages(library(pbdMPI))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
-
-init.grid()
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- parseCMDArg(arg)
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Mpath <- argList[['Mpath']]
-Npath <- argList[['Npath']]
-wPath <- argList[['wPath']]
-nodes <- argList[['nodes']]
-outdir <- argList[['outdir']]
-
-# reading in giant CSV files in R is a terrible process so just
-# allocate data on the fly in distributed memory
-# this amounts to the same thing for testing purposes
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
-
-M <- alloc_matrix(Mpath)
-if (opType == "SVD") {
-    call <- 'svd( M, nu=10, nv=10 )'
-} else {
-    comm.print('Invalid operation')
-    comm.stop()
-}
-
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
-times <- double(5)
-
-for (ix in 1:5) {
-    barrier()
-    a <- Sys.time()
-
-    res <- eval(parse(text=call))
-
-    barrier()
-    b <- Sys.time()
-    times[ix] <- b - a
-}
-
-if (comm.rank() == 0) {
-    rows <- nrow(M)
-    cols <- ncol(M)
-    path <- paste('../output/', outdir,
-                  '/R_', mattype, '_',
-                  opType, nodes,
-                  '.txt', sep='')
-
-    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
-    runTimes[1, 4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-finalize()
-
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M2_tall.csv Npath=../external/disk_data/N2_tall.csv wPath=../external/disk_data/w2_tall.csv tableStub=2_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=2
-
-CPU count capped at: None
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT))
-suppressMessages(library(pbdMPI))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
-
-init.grid()
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- parseCMDArg(arg)
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Mpath <- argList[['Mpath']]
-Npath <- argList[['Npath']]
-wPath <- argList[['wPath']]
-nodes <- argList[['nodes']]
-outdir <- argList[['outdir']]
-
-# reading in giant CSV files in R is a terrible process so just
-# allocate data on the fly in distributed memory
-# this amounts to the same thing for testing purposes
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
-
-M <- alloc_matrix(Mpath)
-if (opType == "SVD") {
-    call <- 'svd( M, nu=10, nv=10 )'
-} else {
-    comm.print('Invalid operation')
-    comm.stop()
-}
-
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
-times <- double(5)
-
-for (ix in 1:5) {
-    barrier()
-    a <- Sys.time()
-
-    res <- eval(parse(text=call))
-
-    barrier()
-    b <- Sys.time()
-    times[ix] <- b - a
-}
-
-if (comm.rank() == 0) {
-    rows <- nrow(M)
-    cols <- ncol(M)
-    path <- paste('../output/', outdir,
-                  '/R_', mattype, '_',
-                  opType, nodes,
-                  '.txt', sep='')
-
-    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
-    runTimes[1, 4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-finalize()
-
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M4_tall.csv Npath=../external/disk_data/N4_tall.csv wPath=../external/disk_data/w4_tall.csv tableStub=4_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=4
-
-CPU count capped at: None
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT))
-suppressMessages(library(pbdMPI))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
-
-init.grid()
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- parseCMDArg(arg)
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Mpath <- argList[['Mpath']]
-Npath <- argList[['Npath']]
-wPath <- argList[['wPath']]
-nodes <- argList[['nodes']]
-outdir <- argList[['outdir']]
-
-# reading in giant CSV files in R is a terrible process so just
-# allocate data on the fly in distributed memory
-# this amounts to the same thing for testing purposes
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
-
-M <- alloc_matrix(Mpath)
-if (opType == "SVD") {
-    call <- 'svd( M, nu=10, nv=10 )'
-} else {
-    comm.print('Invalid operation')
-    comm.stop()
-}
-
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
-times <- double(5)
-
-for (ix in 1:5) {
-    barrier()
-    a <- Sys.time()
-
-    res <- eval(parse(text=call))
-
-    barrier()
-    b <- Sys.time()
-    times[ix] <- b - a
-}
-
-if (comm.rank() == 0) {
-    rows <- nrow(M)
-    cols <- ncol(M)
-    path <- paste('../output/', outdir,
-                  '/R_', mattype, '_',
-                  opType, nodes,
-                  '.txt', sep='')
-
-    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
-    runTimes[1, 4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-finalize()
-
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M8_tall.csv Npath=../external/disk_data/N8_tall.csv wPath=../external/disk_data/w8_tall.csv tableStub=8_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=8
-
-CPU count capped at: None
-Memory use capped at: -1e-09GB
-CPU Time capped at: -1 seconds
-suppressMessages(library(pbdDMAT))
-suppressMessages(library(pbdMPI))
-BENCHMARK_PROJECT_ROOT <- Sys.getenv('BENCHMARK_PROJECT_ROOT')
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/R_timing_utils.R', sep = ''))
-source(paste(BENCHMARK_PROJECT_ROOT, '/lib/R/readDMM.R', sep=''))
-
-init.grid()
-
-argv <- commandArgs(trailingOnly = TRUE)
-argList <- list()
-for (arg in argv) {
-    parsed <- parseCMDArg(arg)
-    argList[[parsed[[1]]]] <- parsed[[2]]
-}
-
-mattype <- argList[['mattype']]
-opType <- argList[['opType']]
-Mpath <- argList[['Mpath']]
-Npath <- argList[['Npath']]
-wPath <- argList[['wPath']]
-nodes <- argList[['nodes']]
-outdir <- argList[['outdir']]
-
-# reading in giant CSV files in R is a terrible process so just
-# allocate data on the fly in distributed memory
-# this amounts to the same thing for testing purposes
-alloc_matrix <- function(path, bldim=32) {
-    meta <- parseMetadata(path)
-    M <- ddmatrix('rnorm', meta[['rows']], meta[['cols']], bldim=bldim)
-    return(M)
-}
-
-M <- alloc_matrix(Mpath)
-if (opType == "SVD") {
-    call <- 'svd( M, nu=10, nv=10 )'
-} else {
-    comm.print('Invalid operation')
-    comm.stop()
-}
-
-# unfortunately we need to implement timing from scratch here
-# as it's not clear how MPI plays with R's environments
-times <- double(5)
-
-for (ix in 1:5) {
-    barrier()
-    a <- Sys.time()
-
-    res <- eval(parse(text=call))
-
-    barrier()
-    b <- Sys.time()
-    times[ix] <- b - a
-}
-
-if (comm.rank() == 0) {
-    rows <- nrow(M)
-    cols <- ncol(M)
-    path <- paste('../output/', outdir,
-                  '/R_', mattype, '_',
-                  opType, nodes,
-                  '.txt', sep='')
-
-    colnames <- c('nodes', 'rows', 'cols', paste('time',1:5,sep=''))
-    runTimes <- as.data.frame(matrix(0, nrow = 1, ncol = length(colnames)))
-    names(runTimes) <- colnames
-
-    runTimes[1,c('nodes','rows','cols')] <- c(nodes, rows, cols)
-    runTimes[1, 4:ncol(runTimes)] <- times
-    writeHeader <- if (!file.exists(path)) TRUE else FALSE
-    write.table(runTimes,
-                path,
-                append = TRUE,
-                row.names = FALSE,
-                col.names = writeHeader,
-                sep = ',')
-}
-
-finalize()
-
-Running: mpirun -x BENCHMARK_PROJECT_ROOT -x HADOOP_CMD -np 176 -host mycluster-slave-4,mycluster-slave-5,mycluster-slave-6,mycluster-slave-7,mycluster-slave-1,mycluster-slave-2,mycluster-slave-3,mycluster-master -mca btl ^openib --oversubscribe Rscript R_matrix_ops.R opType=SVD mattype=tall Mpath=../external/disk_data/M16_tall.csv Npath=../external/disk_data/N16_tall.csv wPath=../external/disk_data/w16_tall.csv tableStub=16_tall nodes=8 passPath=/scratch/pass.csv outdir=scale_mat_size savestub=16
+Running: python _msize_scaling_tests.py None "2 4 8 16" "SYSTEMML MLLIB"
 
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
 
- make.py ended: 2018-01-05 02:57:33
+hdfs dfs -copyFromLocal -f "../temp/pass.csv" /scratch//pass.csv
+
+hdfs dfs -copyFromLocal -f ../temp/pass.csv.mtd /scratch//pass.csv.mtd
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+// Copyright 2018 Anthony H Thomas and Arun Kumar
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkDecompositions {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibDecompositions")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/Decompositions (Distributed Dense)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "SVD" => doRowMatrixOp(mPath, "SVD", sc)
+            case _       => Array[Double](0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "SVD") {
+                val res = M.computeSVD(10, true)
+                println(res.U.rows.count)
+                println(res.V.toArray.length)
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+}
+
+Running: spark-submit --class SparkDecompositions   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=SVD mattype=tall Mpath=/scratch/M2_tall.csv Npath=/scratch/N2_tall.csv wPath=/scratch/w2_tall.csv tableStub=2_tall nodes=None passPath=/scratch/pass.csv outdir=scale_mat_size savestub=2
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+// Copyright 2018 Anthony H Thomas and Arun Kumar
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkDecompositions {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibDecompositions")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/Decompositions (Distributed Dense)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "SVD" => doRowMatrixOp(mPath, "SVD", sc)
+            case _       => Array[Double](0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "SVD") {
+                val res = M.computeSVD(10, true)
+                println(res.U.rows.count)
+                println(res.V.toArray.length)
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+}
+
+Running: spark-submit --class SparkDecompositions   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=SVD mattype=tall Mpath=/scratch/M4_tall.csv Npath=/scratch/N4_tall.csv wPath=/scratch/w4_tall.csv tableStub=4_tall nodes=None passPath=/scratch/pass.csv outdir=scale_mat_size savestub=4
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+// Copyright 2018 Anthony H Thomas and Arun Kumar
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkDecompositions {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibDecompositions")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/Decompositions (Distributed Dense)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "SVD" => doRowMatrixOp(mPath, "SVD", sc)
+            case _       => Array[Double](0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "SVD") {
+                val res = M.computeSVD(10, true)
+                println(res.U.rows.count)
+                println(res.V.toArray.length)
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+}
+
+Running: spark-submit --class SparkDecompositions   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=SVD mattype=tall Mpath=/scratch/M8_tall.csv Npath=/scratch/N8_tall.csv wPath=/scratch/w8_tall.csv tableStub=8_tall nodes=None passPath=/scratch/pass.csv outdir=scale_mat_size savestub=8
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+./mllib/src/main/scala/spark_matrix_ops.scala
+================================================================================
+// Copyright 2018 Anthony H Thomas and Arun Kumar
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import scala.math._
+import java.nio.file.{Paths, Files}
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.spark.rdd._
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.linalg
+import org.apache.spark.mllib.random.RandomRDDs._
+import org.apache.spark.mllib.linalg.distributed._
+import org.apache.spark.sql._
+import scala.tools.nsc.io._
+import scala.io.Source
+import java.util.Random
+import scala.collection.immutable._
+
+object SparkDecompositions {
+    def main(args: Array[String]) {
+        val conf = new SparkConf().setAppName("MLLibDecompositions")
+        val sc = new SparkContext(conf)
+
+        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+
+        val argMap = Map[String,String](
+                args.map(_.split("=")).map({
+                    case Array(x,y) => (x -> y)
+                }):_*
+            )
+
+        val mattype = argMap("mattype")
+        val opType = argMap("opType")
+        val mPath = argMap("Mpath")
+        val nPath = argMap("Npath")
+        val passPath = argMap("passPath")
+        val nodes = argMap("nodes")
+        val outdir = argMap("outdir")
+
+        val stub = s"/tests/Decompositions (Distributed Dense)/output/${outdir}/"
+        val base = s"mllib_${mattype}_${opType}${nodes}.txt"
+        val path = root + stub + base
+
+        if (!Files.exists(Paths.get(path))) {
+          File(path).writeAll("nodes,rows,cols,time1,time2,time3,time4,time5\n")
+        }
+
+        val results : Array[Double] = opType match {
+            case "SVD" => doRowMatrixOp(mPath, "SVD", sc)
+            case _       => Array[Double](0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+
+        File(path).appendAll(
+            nodes + "," + results.mkString(",") + '\n')
+    }
+
+    def doRowMatrixOp(Mpath: String,
+                      opType: String,
+                      sc: SparkContext) : Array[Double] = {
+
+        val M = readMM(Mpath, sc)
+        val rows = M.numRows()
+        val cols = M.numCols()
+        println( M.rows.count )
+
+        val times = Array[Double](0,0,0,0,0)
+        for (ix <- 0 to 4) {
+            val start = System.nanoTime()
+            
+            if (opType == "SVD") {
+                val res = M.computeSVD(10, true)
+                println(res.U.rows.count)
+                println(res.V.toArray.length)
+            }
+            val stop = System.nanoTime()
+            times(ix) = (stop - start)/1e9
+        }
+
+        val results = Array[Double](rows, cols) ++ times
+        return results
+    }
+
+    def readMM(path: String, sc: SparkContext) : IndexedRowMatrix = {
+        val M = sc.textFile(path, 500).zipWithIndex().
+                         map(
+                            tup => new IndexedRow(
+                                tup._2.toInt,
+                                new DenseVector(tup._1.split(",").
+                                    map(_.toDouble))))
+        val BM = new IndexedRowMatrix(M)
+        BM.rows.persist(MEMORY_AND_DISK_SER)
+        return BM
+    }
+    
+}
+
+Running: spark-submit --class SparkDecompositions   ./mllib/target/scala-2.10/MLLibMatrixops-assembly-0.1.jar opType=SVD mattype=tall Mpath=/scratch/M16_tall.csv Npath=/scratch/N16_tall.csv wPath=/scratch/w16_tall.csv tableStub=16_tall nodes=None passPath=/scratch/pass.csv outdir=scale_mat_size savestub=16
+
+CPU count capped at: None
+Memory use capped at: -1e-09GB
+CPU Time capped at: -1 seconds
+
+ make.py ended: 2018-05-17 05:33:25

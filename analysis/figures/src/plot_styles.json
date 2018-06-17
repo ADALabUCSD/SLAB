@@ -5,6 +5,12 @@
         "lty": [4, 2, 1, 2, 1, 2],
         "pty": "s"
     },
+    "scidb": {
+        "pretty-name": "SciDB",
+        "color": "darkred",
+        "lty": [4, 2, 4, 2, 1, 2],
+        "pty": "v"
+    },
     "R": {
         "pretty-name": "R",
         "color": "darkgreen",
@@ -75,6 +81,7 @@
         "pretty-name": "SystemML",
         "color": "blue",
         "lty": [4, 2, 1, 2, 1, 2],
+        "stub": " (LA)",
         "pty": "s"
     }
 }

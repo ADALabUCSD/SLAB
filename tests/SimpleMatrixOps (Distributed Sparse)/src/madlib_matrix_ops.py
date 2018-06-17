@@ -25,7 +25,6 @@ from sql_cxn import SQLCxn
 import np_timing_utils as utils
 
 def doMatrixOp(kwargs):
-
     opType  = kwargs.get('opType')
     mattype = kwargs.get('mattype')
     tableStub = kwargs.get('tableStub')

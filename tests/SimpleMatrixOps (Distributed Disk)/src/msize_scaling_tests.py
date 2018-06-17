@@ -38,7 +38,7 @@ cmd_args = ('opType={opType} mattype={mattype}'
             ' outdir=scale_mat_size savestub={savestub}')
 
 data.gen_data_disk('../temp/pass.csv', 2, 2, 2**12)
-utils.hdfs_put('../temp/pass.csv')
+# utils.hdfs_put('../temp/pass.csv')
 
 for op in ops:
     for gb in matsize:
@@ -89,3 +89,7 @@ for op in ops:
         if 'R' in systems:
           utils.run_pbdR(program = 'R_matrix_ops.R',
                          cmd_args = args_disk)
+
+        if 'SCIDB' in systems:
+          utils.run_python(program = 'scidb_matrix_ops.py',
+                           cmd_args = args_disk)

@@ -1,5 +1,5 @@
 
- make.py started: 2018-01-27 20:13:10 /home/ubuntu/benchmark/tests/SimpleMatrixOps (Single Node Dense)/src 
+ make.py started: 2018-06-06 20:01:40 /home/ubuntu/SLAB/tests/SimpleMatrixOps (Single Node Dense)/src 
 
 
 name := "MLLibAlgs"
@@ -77,880 +77,930 @@ Running: sbt -Dsbt.log.noformat=true assembly
 CPU count capped at: None
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-./mllib/src/main/scala/mllib_matrix_ops.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import java.util.Random
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import breeze.{linalg => bAlg, numerics => bNum}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-object MLLibMatrixOps extends App {
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import atexit
+import scidbpy
+import subprocess
 
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+import numpy as np
+import pandas as pd
+
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
+
+sys.path.append(os.path.join(ROOT,'lib','python'))
+from np_timing_utils import parse_cmd_args
+
+def do_matrix_op(kwargs):
+    op_type = kwargs.get('opType')
+    mattype = kwargs.get('mattype')
+    fixed_axis = int(kwargs.get('fixedAxis'))
+    nrow_scale = map(lambda x: int(x), kwargs['nrows'].split(' '))
+    nproc = kwargs.get('nproc', None)
+
+    if nproc is None:
+        path = os.path.join(
+            '..','output','scidb_{}_{}.txt'.format(mattype, op_type))
+    else:
+        path = os.path.join(
+            '..','output','scidb_cpu_{}_{}.txt'.format(mattype, op_type))
+    
+    num_procs = nproc if nproc is not None else 24
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(num_procs, debug=True, stub=op_type)
+
+    cxn = scidbpy.connect()
+    print cxn.iquery("list('instances')", fetch=True)
+    colnames = ['rows','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    for nr in nrow_scale:
+        nrow = fixed_axis if op_type == 'GMM' else nr
+        ncol = nr if op_type == 'GMM' else fixed_axis
+
+        M_name = 'M{}{}'.format(nrow, ncol)
+        if not M_name in dir(cxn.arrays):
+            alloc_matrix(nrow, ncol, M_name, cxn)
+        if op_type == 'GMM':
+            if not 'N{}{}'.format(ncol, nrow) in dir(cxn.arrays):
+                alloc_matrix(ncol, nrow, 'N{}{}'.format(ncol, nrow), cxn)
+            N_name = 'N{}{}'.format(ncol, nrow)
+            zv_name = 'ZEROS{}{}'.format(nrow, nrow)
+            zeros(nrow, nrow, zv_name, cxn)
+        if op_type == 'TSM':
+            zv_name = 'ZEROS{}{}'.format(ncol, ncol)
+            zeros(ncol, ncol, zv_name, cxn)
+        if op_type == 'ADD':
+            if not 'N{}{}'.format(nrow, ncol) in dir(cxn.arrays):
+                alloc_matrix(nrow, ncol, 'N{}{}'.format(nrow, ncol), cxn)
+            N_name = 'N{}{}'.format(nrow, ncol)
+        if op_type == 'MVM':
+            v_name = 'v{}'.format(fixed_axis)
+            if not v_name in dir(cxn.arrays):
+                alloc_vector(fixed_axis, v_name, cxn)
+            zv_name = 'ZEROS{}'.format(nrow)
+            zeros(nrow, 0, zv_name, cxn)
+
+        cxn.iquery("load_library('dense_linear_algebra')")
+        if op_type == 'TRANS':
+            call = 'consume(transpose({}))'.format(M_name)
+        elif op_type == 'NORM':
+            call = 'aggregate(apply({}, val2, pow(val,2.0)), sum(val2))'.format(
+                M_name)
+        elif op_type == 'GMM':
+            call = 'gemm({},{},{})'.format(M_name, N_name, zv_name)
+        elif op_type == 'MVM':
+            call = 'gemm({},{},{})'.format(M_name, v_name, zv_name)
+        elif op_type == 'TSM':
+            call = 'gemm({},{},{}, transa:true)'.format(M_name, M_name, zv_name)
+        elif op_type == 'ADD':
+            call = 'consume(apply(join({0},{1}), sum, {0}.val+{1}.val))'.format(
+                M_name, N_name)
+        else:
+            raise StandardError('Invalid operator type')
         
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
+        run_times.loc[:,'rows'] = nr if nproc is None else nproc
+        run_times.ix[:,1:] = time_stmt(call, cxn)
+        write_header = False if (os.path.exists(path)) else True
+        run_times.to_csv(path, index=False, header=write_header, mode='a')
+        P.terminate()
+        stdout.close()
+        stderr.close()
 
-        val nrows = argMap("nrows").split(" ").map(x => x.toInt)
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val fixedAxis = argMap("fixedAxis").toInt
-        val nproc = argMap.get("nproc")
+def init_scidb(nproc, debug=False, stub=''):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
 
-        val stub = "/tests/SimpleMatrixOps (Single Node Dense)/output/"
-        val base = nproc match {
-            case Some(np) => s"mllib_cpu_${opType}_scale.txt"
-            case None => s"mllib_${mattype}_${opType}.txt"
-        }
-        val path = root + stub + base
-        
-        if (!Files.exists(Paths.get(path)))
-            File(path).writeAll("rows,time1,time2,time3,time4,time5\n")
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
 
-        for (nr <- nrows) {
-            val nrow = opType match {
-                case "GMM" => fixedAxis
-                case _     => nr
-            }
-            val ncol = opType match {
-                case "GMM" => nr
-                case _     => fixedAxis
-            }
-            val major_axis = opType match {
-                case "GMM" => ncol
-                case _     => nrow
-            }
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
+    else:
+        stdout = open('scidb{}.out'.format(stub), 'w')
+        stderr = open('scidb{}.err'.format(stub), 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(int(nproc)-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-            val M = as_dense(Matrices.rand(nrow, ncol, new Random()))
-            val N = opType match {
-                case "GMM" => as_dense(Matrices.rand(ncol, nrow, new Random()))
-                case "ADD" => as_dense(Matrices.rand(nrow, ncol, new Random()))
-                case _     => as_dense(Matrices.rand(1, 1, new Random()))
-            }
-            val v = opType match {
-                case "MVM" => vectorize(Matrices.rand(ncol, 1, new Random()))
-                case _     => vectorize(Matrices.rand(1, 1, new Random()))
-            }
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    cxn.iquery(stmt)
 
-            val times = Array[Double](0,0,0,0,0)
-            for (ix <- 0 to 4) {
-                println(s"Test => ${ix}")
-                val start = System.nanoTime()
+def alloc_matrix(rows, cols, name, 
+        cxn, method='(RANDOM() % 100) / 10.0',
+        chunksize=1000):
+    stmt = """
+        store(build(<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(r=rows, c=cols, cz=chunksize, m=method, n=name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val action = opType match {
-                    case "TRANS" => do_trans( M )
-                    case "NORM"  => do_norm( M )
-                    case "GMM"   => do_gmm( M, N )
-                    case "MVM"   => do_mvm( M, v )
-                    case "TSM"   => do_tsm( M )
-                    case "ADD"   => do_add( M, N )
-                    case _       => throw new Exception("Invalid Operator")
-                }
+def alloc_vector(length, name, cxn, method='(RANDOM() % 100) / 10.0'):
+    stmt = """
+        store(build(<val:double>[row=0:{};col=0:0], {}), {})
+    """.format(length, method, name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val stop = System.nanoTime()
-                times(ix) = (stop - start) / 1e9
-            }
-            val pref = nproc match {
-                case Some(np) => s"${np}"
-                case None     => s"${nr}"
-            }
-            File(path).appendAll(s"${pref}"+","+times.mkString(",")+'\n')
-        } 
-    }
+def time_stmt(stmt, cxn, cleanup=None, n_reps=5):
+    times = []
+    cleanup = cleanup if cleanup is not None else []
+    for ix in range(n_reps):
+        if ix == 0:
+            print stmt
+        start = time.time()
+        cxn.iquery(stmt)
+        stop = time.time()
+        print 'Test {} => {}'.format(ix, stop-start)
+        if len(cleanup) > 0:
+            for obj in cleanup:
+                cxn.iquery('remove({})'.format(obj))
+        times.append(stop-start)
+    return times
 
-    def do_trans(M: DenseMatrix) {
-        return M.transpose
-    }
+if __name__=='__main__':
+    argv = parse_cmd_args(sys.argv[1:])
+    do_matrix_op(argv)
 
-    def do_norm(M: DenseMatrix) {
-        return M.toArray.map(x => pow(x, 2)).sum
-    }
+Running: taskset -c 0-23 python _scidb_matrix_ops.py opType=TSM mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=1
 
-    def do_gmm(M: DenseMatrix, N: DenseMatrix) {
-        return M.multiply( N )
-    }
-
-    def do_tsm(M: DenseMatrix) {
-        return M.transpose.multiply( M )
-    }
-
-    def do_add(M: DenseMatrix, N: DenseMatrix) {
-        return from_breeze( as_breeze( M ) + as_breeze( N ) )
-    }
-
-    def do_mvm(M: DenseMatrix, v: DenseVector) {
-        return M.multiply( v )
-    }
-
-        // Spark annoyingly does not expose any of these primitive methods
-    // which makes their library not very useful
-    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
-        case v: linalg.SparseVector =>
-            return new bSparseVector[Double](v.indices, v.values, v.size)
-        case v: linalg.DenseVector  =>
-            return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
-        case v: bSparseVector[Double] =>
-            return Vectors.sparse(v.length, v.activeIterator.toSeq)
-        case v: bDenseVector[Double] =>
-            return Vectors.dense(v.data)
-    }
-
-    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
-        case m: linalg.DenseMatrix =>
-            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-        case m: linalg.SparseMatrix =>
-            return new bSparseMatrix(
-                m.values, m.numRows, m.numCols,
-                m.colPtrs, m.numActives, m.rowIndices)
-    }
-
-    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
-        case m: bDenseMatrix[Double] =>
-            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
-        case m: bSparseMatrix[Double] =>
-            return Matrices.sparse(m.rows, m.cols,
-                    m.colPtrs, m.rowIndices, m.data)
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense(M.toArray) )
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    } 
-}
-
-Running: taskset -c 0 spark-submit --class MLLibMatrixOps  --driver-cores 1   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=ADD mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=1
-
-CPU count capped at: 1
+CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-./mllib/src/main/scala/mllib_matrix_ops.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import java.util.Random
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import breeze.{linalg => bAlg, numerics => bNum}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-object MLLibMatrixOps extends App {
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import atexit
+import scidbpy
+import subprocess
 
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+import numpy as np
+import pandas as pd
+
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
+
+sys.path.append(os.path.join(ROOT,'lib','python'))
+from np_timing_utils import parse_cmd_args
+
+def do_matrix_op(kwargs):
+    op_type = kwargs.get('opType')
+    mattype = kwargs.get('mattype')
+    fixed_axis = int(kwargs.get('fixedAxis'))
+    nrow_scale = map(lambda x: int(x), kwargs['nrows'].split(' '))
+    nproc = kwargs.get('nproc', None)
+
+    if nproc is None:
+        path = os.path.join(
+            '..','output','scidb_{}_{}.txt'.format(mattype, op_type))
+    else:
+        path = os.path.join(
+            '..','output','scidb_cpu_{}_{}.txt'.format(mattype, op_type))
+    
+    num_procs = nproc if nproc is not None else 24
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(num_procs, debug=True, stub=op_type)
+
+    cxn = scidbpy.connect()
+    print cxn.iquery("list('instances')", fetch=True)
+    colnames = ['rows','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    for nr in nrow_scale:
+        nrow = fixed_axis if op_type == 'GMM' else nr
+        ncol = nr if op_type == 'GMM' else fixed_axis
+
+        M_name = 'M{}{}'.format(nrow, ncol)
+        if not M_name in dir(cxn.arrays):
+            alloc_matrix(nrow, ncol, M_name, cxn)
+        if op_type == 'GMM':
+            if not 'N{}{}'.format(ncol, nrow) in dir(cxn.arrays):
+                alloc_matrix(ncol, nrow, 'N{}{}'.format(ncol, nrow), cxn)
+            N_name = 'N{}{}'.format(ncol, nrow)
+            zv_name = 'ZEROS{}{}'.format(nrow, nrow)
+            zeros(nrow, nrow, zv_name, cxn)
+        if op_type == 'TSM':
+            zv_name = 'ZEROS{}{}'.format(ncol, ncol)
+            zeros(ncol, ncol, zv_name, cxn)
+        if op_type == 'ADD':
+            if not 'N{}{}'.format(nrow, ncol) in dir(cxn.arrays):
+                alloc_matrix(nrow, ncol, 'N{}{}'.format(nrow, ncol), cxn)
+            N_name = 'N{}{}'.format(nrow, ncol)
+        if op_type == 'MVM':
+            v_name = 'v{}'.format(fixed_axis)
+            if not v_name in dir(cxn.arrays):
+                alloc_vector(fixed_axis, v_name, cxn)
+            zv_name = 'ZEROS{}'.format(nrow)
+            zeros(nrow, 0, zv_name, cxn)
+
+        cxn.iquery("load_library('dense_linear_algebra')")
+        if op_type == 'TRANS':
+            call = 'consume(transpose({}))'.format(M_name)
+        elif op_type == 'NORM':
+            call = 'aggregate(apply({}, val2, pow(val,2.0)), sum(val2))'.format(
+                M_name)
+        elif op_type == 'GMM':
+            call = 'gemm({},{},{})'.format(M_name, N_name, zv_name)
+        elif op_type == 'MVM':
+            call = 'gemm({},{},{})'.format(M_name, v_name, zv_name)
+        elif op_type == 'TSM':
+            call = 'gemm({},{},{}, transa:true)'.format(M_name, M_name, zv_name)
+        elif op_type == 'ADD':
+            call = 'consume(apply(join({0},{1}), sum, {0}.val+{1}.val))'.format(
+                M_name, N_name)
+        else:
+            raise StandardError('Invalid operator type')
         
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
+        run_times.loc[:,'rows'] = nr if nproc is None else nproc
+        run_times.ix[:,1:] = time_stmt(call, cxn)
+        write_header = False if (os.path.exists(path)) else True
+        run_times.to_csv(path, index=False, header=write_header, mode='a')
+        P.terminate()
+        stdout.close()
+        stderr.close()
 
-        val nrows = argMap("nrows").split(" ").map(x => x.toInt)
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val fixedAxis = argMap("fixedAxis").toInt
-        val nproc = argMap.get("nproc")
+def init_scidb(nproc, debug=False, stub=''):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
 
-        val stub = "/tests/SimpleMatrixOps (Single Node Dense)/output/"
-        val base = nproc match {
-            case Some(np) => s"mllib_cpu_${opType}_scale.txt"
-            case None => s"mllib_${mattype}_${opType}.txt"
-        }
-        val path = root + stub + base
-        
-        if (!Files.exists(Paths.get(path)))
-            File(path).writeAll("rows,time1,time2,time3,time4,time5\n")
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
 
-        for (nr <- nrows) {
-            val nrow = opType match {
-                case "GMM" => fixedAxis
-                case _     => nr
-            }
-            val ncol = opType match {
-                case "GMM" => nr
-                case _     => fixedAxis
-            }
-            val major_axis = opType match {
-                case "GMM" => ncol
-                case _     => nrow
-            }
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
+    else:
+        stdout = open('scidb{}.out'.format(stub), 'w')
+        stderr = open('scidb{}.err'.format(stub), 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(int(nproc)-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-            val M = as_dense(Matrices.rand(nrow, ncol, new Random()))
-            val N = opType match {
-                case "GMM" => as_dense(Matrices.rand(ncol, nrow, new Random()))
-                case "ADD" => as_dense(Matrices.rand(nrow, ncol, new Random()))
-                case _     => as_dense(Matrices.rand(1, 1, new Random()))
-            }
-            val v = opType match {
-                case "MVM" => vectorize(Matrices.rand(ncol, 1, new Random()))
-                case _     => vectorize(Matrices.rand(1, 1, new Random()))
-            }
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    cxn.iquery(stmt)
 
-            val times = Array[Double](0,0,0,0,0)
-            for (ix <- 0 to 4) {
-                println(s"Test => ${ix}")
-                val start = System.nanoTime()
+def alloc_matrix(rows, cols, name, 
+        cxn, method='(RANDOM() % 100) / 10.0',
+        chunksize=1000):
+    stmt = """
+        store(build(<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(r=rows, c=cols, cz=chunksize, m=method, n=name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val action = opType match {
-                    case "TRANS" => do_trans( M )
-                    case "NORM"  => do_norm( M )
-                    case "GMM"   => do_gmm( M, N )
-                    case "MVM"   => do_mvm( M, v )
-                    case "TSM"   => do_tsm( M )
-                    case "ADD"   => do_add( M, N )
-                    case _       => throw new Exception("Invalid Operator")
-                }
+def alloc_vector(length, name, cxn, method='(RANDOM() % 100) / 10.0'):
+    stmt = """
+        store(build(<val:double>[row=0:{};col=0:0], {}), {})
+    """.format(length, method, name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val stop = System.nanoTime()
-                times(ix) = (stop - start) / 1e9
-            }
-            val pref = nproc match {
-                case Some(np) => s"${np}"
-                case None     => s"${nr}"
-            }
-            File(path).appendAll(s"${pref}"+","+times.mkString(",")+'\n')
-        } 
-    }
+def time_stmt(stmt, cxn, cleanup=None, n_reps=5):
+    times = []
+    cleanup = cleanup if cleanup is not None else []
+    for ix in range(n_reps):
+        if ix == 0:
+            print stmt
+        start = time.time()
+        cxn.iquery(stmt)
+        stop = time.time()
+        print 'Test {} => {}'.format(ix, stop-start)
+        if len(cleanup) > 0:
+            for obj in cleanup:
+                cxn.iquery('remove({})'.format(obj))
+        times.append(stop-start)
+    return times
 
-    def do_trans(M: DenseMatrix) {
-        return M.transpose
-    }
+if __name__=='__main__':
+    argv = parse_cmd_args(sys.argv[1:])
+    do_matrix_op(argv)
 
-    def do_norm(M: DenseMatrix) {
-        return M.toArray.map(x => pow(x, 2)).sum
-    }
+Running: taskset -c 0-23 python _scidb_matrix_ops.py opType=TSM mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=2
 
-    def do_gmm(M: DenseMatrix, N: DenseMatrix) {
-        return M.multiply( N )
-    }
-
-    def do_tsm(M: DenseMatrix) {
-        return M.transpose.multiply( M )
-    }
-
-    def do_add(M: DenseMatrix, N: DenseMatrix) {
-        return from_breeze( as_breeze( M ) + as_breeze( N ) )
-    }
-
-    def do_mvm(M: DenseMatrix, v: DenseVector) {
-        return M.multiply( v )
-    }
-
-        // Spark annoyingly does not expose any of these primitive methods
-    // which makes their library not very useful
-    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
-        case v: linalg.SparseVector =>
-            return new bSparseVector[Double](v.indices, v.values, v.size)
-        case v: linalg.DenseVector  =>
-            return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
-        case v: bSparseVector[Double] =>
-            return Vectors.sparse(v.length, v.activeIterator.toSeq)
-        case v: bDenseVector[Double] =>
-            return Vectors.dense(v.data)
-    }
-
-    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
-        case m: linalg.DenseMatrix =>
-            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-        case m: linalg.SparseMatrix =>
-            return new bSparseMatrix(
-                m.values, m.numRows, m.numCols,
-                m.colPtrs, m.numActives, m.rowIndices)
-    }
-
-    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
-        case m: bDenseMatrix[Double] =>
-            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
-        case m: bSparseMatrix[Double] =>
-            return Matrices.sparse(m.rows, m.cols,
-                    m.colPtrs, m.rowIndices, m.data)
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense(M.toArray) )
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    } 
-}
-
-Running: taskset -c 0-1 spark-submit --class MLLibMatrixOps  --driver-cores 2   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=ADD mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=2
-
-CPU count capped at: 2
+CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-./mllib/src/main/scala/mllib_matrix_ops.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import java.util.Random
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import breeze.{linalg => bAlg, numerics => bNum}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-object MLLibMatrixOps extends App {
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import atexit
+import scidbpy
+import subprocess
 
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+import numpy as np
+import pandas as pd
+
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
+
+sys.path.append(os.path.join(ROOT,'lib','python'))
+from np_timing_utils import parse_cmd_args
+
+def do_matrix_op(kwargs):
+    op_type = kwargs.get('opType')
+    mattype = kwargs.get('mattype')
+    fixed_axis = int(kwargs.get('fixedAxis'))
+    nrow_scale = map(lambda x: int(x), kwargs['nrows'].split(' '))
+    nproc = kwargs.get('nproc', None)
+
+    if nproc is None:
+        path = os.path.join(
+            '..','output','scidb_{}_{}.txt'.format(mattype, op_type))
+    else:
+        path = os.path.join(
+            '..','output','scidb_cpu_{}_{}.txt'.format(mattype, op_type))
+    
+    num_procs = nproc if nproc is not None else 24
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(num_procs, debug=True, stub=op_type)
+
+    cxn = scidbpy.connect()
+    print cxn.iquery("list('instances')", fetch=True)
+    colnames = ['rows','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    for nr in nrow_scale:
+        nrow = fixed_axis if op_type == 'GMM' else nr
+        ncol = nr if op_type == 'GMM' else fixed_axis
+
+        M_name = 'M{}{}'.format(nrow, ncol)
+        if not M_name in dir(cxn.arrays):
+            alloc_matrix(nrow, ncol, M_name, cxn)
+        if op_type == 'GMM':
+            if not 'N{}{}'.format(ncol, nrow) in dir(cxn.arrays):
+                alloc_matrix(ncol, nrow, 'N{}{}'.format(ncol, nrow), cxn)
+            N_name = 'N{}{}'.format(ncol, nrow)
+            zv_name = 'ZEROS{}{}'.format(nrow, nrow)
+            zeros(nrow, nrow, zv_name, cxn)
+        if op_type == 'TSM':
+            zv_name = 'ZEROS{}{}'.format(ncol, ncol)
+            zeros(ncol, ncol, zv_name, cxn)
+        if op_type == 'ADD':
+            if not 'N{}{}'.format(nrow, ncol) in dir(cxn.arrays):
+                alloc_matrix(nrow, ncol, 'N{}{}'.format(nrow, ncol), cxn)
+            N_name = 'N{}{}'.format(nrow, ncol)
+        if op_type == 'MVM':
+            v_name = 'v{}'.format(fixed_axis)
+            if not v_name in dir(cxn.arrays):
+                alloc_vector(fixed_axis, v_name, cxn)
+            zv_name = 'ZEROS{}'.format(nrow)
+            zeros(nrow, 0, zv_name, cxn)
+
+        cxn.iquery("load_library('dense_linear_algebra')")
+        if op_type == 'TRANS':
+            call = 'consume(transpose({}))'.format(M_name)
+        elif op_type == 'NORM':
+            call = 'aggregate(apply({}, val2, pow(val,2.0)), sum(val2))'.format(
+                M_name)
+        elif op_type == 'GMM':
+            call = 'gemm({},{},{})'.format(M_name, N_name, zv_name)
+        elif op_type == 'MVM':
+            call = 'gemm({},{},{})'.format(M_name, v_name, zv_name)
+        elif op_type == 'TSM':
+            call = 'gemm({},{},{}, transa:true)'.format(M_name, M_name, zv_name)
+        elif op_type == 'ADD':
+            call = 'consume(apply(join({0},{1}), sum, {0}.val+{1}.val))'.format(
+                M_name, N_name)
+        else:
+            raise StandardError('Invalid operator type')
         
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
+        run_times.loc[:,'rows'] = nr if nproc is None else nproc
+        run_times.ix[:,1:] = time_stmt(call, cxn)
+        write_header = False if (os.path.exists(path)) else True
+        run_times.to_csv(path, index=False, header=write_header, mode='a')
+        P.terminate()
+        stdout.close()
+        stderr.close()
 
-        val nrows = argMap("nrows").split(" ").map(x => x.toInt)
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val fixedAxis = argMap("fixedAxis").toInt
-        val nproc = argMap.get("nproc")
+def init_scidb(nproc, debug=False, stub=''):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
 
-        val stub = "/tests/SimpleMatrixOps (Single Node Dense)/output/"
-        val base = nproc match {
-            case Some(np) => s"mllib_cpu_${opType}_scale.txt"
-            case None => s"mllib_${mattype}_${opType}.txt"
-        }
-        val path = root + stub + base
-        
-        if (!Files.exists(Paths.get(path)))
-            File(path).writeAll("rows,time1,time2,time3,time4,time5\n")
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
 
-        for (nr <- nrows) {
-            val nrow = opType match {
-                case "GMM" => fixedAxis
-                case _     => nr
-            }
-            val ncol = opType match {
-                case "GMM" => nr
-                case _     => fixedAxis
-            }
-            val major_axis = opType match {
-                case "GMM" => ncol
-                case _     => nrow
-            }
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
+    else:
+        stdout = open('scidb{}.out'.format(stub), 'w')
+        stderr = open('scidb{}.err'.format(stub), 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(int(nproc)-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-            val M = as_dense(Matrices.rand(nrow, ncol, new Random()))
-            val N = opType match {
-                case "GMM" => as_dense(Matrices.rand(ncol, nrow, new Random()))
-                case "ADD" => as_dense(Matrices.rand(nrow, ncol, new Random()))
-                case _     => as_dense(Matrices.rand(1, 1, new Random()))
-            }
-            val v = opType match {
-                case "MVM" => vectorize(Matrices.rand(ncol, 1, new Random()))
-                case _     => vectorize(Matrices.rand(1, 1, new Random()))
-            }
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    cxn.iquery(stmt)
 
-            val times = Array[Double](0,0,0,0,0)
-            for (ix <- 0 to 4) {
-                println(s"Test => ${ix}")
-                val start = System.nanoTime()
+def alloc_matrix(rows, cols, name, 
+        cxn, method='(RANDOM() % 100) / 10.0',
+        chunksize=1000):
+    stmt = """
+        store(build(<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(r=rows, c=cols, cz=chunksize, m=method, n=name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val action = opType match {
-                    case "TRANS" => do_trans( M )
-                    case "NORM"  => do_norm( M )
-                    case "GMM"   => do_gmm( M, N )
-                    case "MVM"   => do_mvm( M, v )
-                    case "TSM"   => do_tsm( M )
-                    case "ADD"   => do_add( M, N )
-                    case _       => throw new Exception("Invalid Operator")
-                }
+def alloc_vector(length, name, cxn, method='(RANDOM() % 100) / 10.0'):
+    stmt = """
+        store(build(<val:double>[row=0:{};col=0:0], {}), {})
+    """.format(length, method, name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val stop = System.nanoTime()
-                times(ix) = (stop - start) / 1e9
-            }
-            val pref = nproc match {
-                case Some(np) => s"${np}"
-                case None     => s"${nr}"
-            }
-            File(path).appendAll(s"${pref}"+","+times.mkString(",")+'\n')
-        } 
-    }
+def time_stmt(stmt, cxn, cleanup=None, n_reps=5):
+    times = []
+    cleanup = cleanup if cleanup is not None else []
+    for ix in range(n_reps):
+        if ix == 0:
+            print stmt
+        start = time.time()
+        cxn.iquery(stmt)
+        stop = time.time()
+        print 'Test {} => {}'.format(ix, stop-start)
+        if len(cleanup) > 0:
+            for obj in cleanup:
+                cxn.iquery('remove({})'.format(obj))
+        times.append(stop-start)
+    return times
 
-    def do_trans(M: DenseMatrix) {
-        return M.transpose
-    }
+if __name__=='__main__':
+    argv = parse_cmd_args(sys.argv[1:])
+    do_matrix_op(argv)
 
-    def do_norm(M: DenseMatrix) {
-        return M.toArray.map(x => pow(x, 2)).sum
-    }
+Running: taskset -c 0-23 python _scidb_matrix_ops.py opType=TSM mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=4
 
-    def do_gmm(M: DenseMatrix, N: DenseMatrix) {
-        return M.multiply( N )
-    }
-
-    def do_tsm(M: DenseMatrix) {
-        return M.transpose.multiply( M )
-    }
-
-    def do_add(M: DenseMatrix, N: DenseMatrix) {
-        return from_breeze( as_breeze( M ) + as_breeze( N ) )
-    }
-
-    def do_mvm(M: DenseMatrix, v: DenseVector) {
-        return M.multiply( v )
-    }
-
-        // Spark annoyingly does not expose any of these primitive methods
-    // which makes their library not very useful
-    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
-        case v: linalg.SparseVector =>
-            return new bSparseVector[Double](v.indices, v.values, v.size)
-        case v: linalg.DenseVector  =>
-            return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
-        case v: bSparseVector[Double] =>
-            return Vectors.sparse(v.length, v.activeIterator.toSeq)
-        case v: bDenseVector[Double] =>
-            return Vectors.dense(v.data)
-    }
-
-    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
-        case m: linalg.DenseMatrix =>
-            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-        case m: linalg.SparseMatrix =>
-            return new bSparseMatrix(
-                m.values, m.numRows, m.numCols,
-                m.colPtrs, m.numActives, m.rowIndices)
-    }
-
-    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
-        case m: bDenseMatrix[Double] =>
-            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
-        case m: bSparseMatrix[Double] =>
-            return Matrices.sparse(m.rows, m.cols,
-                    m.colPtrs, m.rowIndices, m.data)
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense(M.toArray) )
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    } 
-}
-
-Running: taskset -c 0-3 spark-submit --class MLLibMatrixOps  --driver-cores 4   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=ADD mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=4
-
-CPU count capped at: 4
+CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-./mllib/src/main/scala/mllib_matrix_ops.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import java.util.Random
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import breeze.{linalg => bAlg, numerics => bNum}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-object MLLibMatrixOps extends App {
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import atexit
+import scidbpy
+import subprocess
 
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+import numpy as np
+import pandas as pd
+
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
+
+sys.path.append(os.path.join(ROOT,'lib','python'))
+from np_timing_utils import parse_cmd_args
+
+def do_matrix_op(kwargs):
+    op_type = kwargs.get('opType')
+    mattype = kwargs.get('mattype')
+    fixed_axis = int(kwargs.get('fixedAxis'))
+    nrow_scale = map(lambda x: int(x), kwargs['nrows'].split(' '))
+    nproc = kwargs.get('nproc', None)
+
+    if nproc is None:
+        path = os.path.join(
+            '..','output','scidb_{}_{}.txt'.format(mattype, op_type))
+    else:
+        path = os.path.join(
+            '..','output','scidb_cpu_{}_{}.txt'.format(mattype, op_type))
+    
+    num_procs = nproc if nproc is not None else 24
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(num_procs, debug=True, stub=op_type)
+
+    cxn = scidbpy.connect()
+    print cxn.iquery("list('instances')", fetch=True)
+    colnames = ['rows','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    for nr in nrow_scale:
+        nrow = fixed_axis if op_type == 'GMM' else nr
+        ncol = nr if op_type == 'GMM' else fixed_axis
+
+        M_name = 'M{}{}'.format(nrow, ncol)
+        if not M_name in dir(cxn.arrays):
+            alloc_matrix(nrow, ncol, M_name, cxn)
+        if op_type == 'GMM':
+            if not 'N{}{}'.format(ncol, nrow) in dir(cxn.arrays):
+                alloc_matrix(ncol, nrow, 'N{}{}'.format(ncol, nrow), cxn)
+            N_name = 'N{}{}'.format(ncol, nrow)
+            zv_name = 'ZEROS{}{}'.format(nrow, nrow)
+            zeros(nrow, nrow, zv_name, cxn)
+        if op_type == 'TSM':
+            zv_name = 'ZEROS{}{}'.format(ncol, ncol)
+            zeros(ncol, ncol, zv_name, cxn)
+        if op_type == 'ADD':
+            if not 'N{}{}'.format(nrow, ncol) in dir(cxn.arrays):
+                alloc_matrix(nrow, ncol, 'N{}{}'.format(nrow, ncol), cxn)
+            N_name = 'N{}{}'.format(nrow, ncol)
+        if op_type == 'MVM':
+            v_name = 'v{}'.format(fixed_axis)
+            if not v_name in dir(cxn.arrays):
+                alloc_vector(fixed_axis, v_name, cxn)
+            zv_name = 'ZEROS{}'.format(nrow)
+            zeros(nrow, 0, zv_name, cxn)
+
+        cxn.iquery("load_library('dense_linear_algebra')")
+        if op_type == 'TRANS':
+            call = 'consume(transpose({}))'.format(M_name)
+        elif op_type == 'NORM':
+            call = 'aggregate(apply({}, val2, pow(val,2.0)), sum(val2))'.format(
+                M_name)
+        elif op_type == 'GMM':
+            call = 'gemm({},{},{})'.format(M_name, N_name, zv_name)
+        elif op_type == 'MVM':
+            call = 'gemm({},{},{})'.format(M_name, v_name, zv_name)
+        elif op_type == 'TSM':
+            call = 'gemm({},{},{}, transa:true)'.format(M_name, M_name, zv_name)
+        elif op_type == 'ADD':
+            call = 'consume(apply(join({0},{1}), sum, {0}.val+{1}.val))'.format(
+                M_name, N_name)
+        else:
+            raise StandardError('Invalid operator type')
         
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
+        run_times.loc[:,'rows'] = nr if nproc is None else nproc
+        run_times.ix[:,1:] = time_stmt(call, cxn)
+        write_header = False if (os.path.exists(path)) else True
+        run_times.to_csv(path, index=False, header=write_header, mode='a')
+        P.terminate()
+        stdout.close()
+        stderr.close()
 
-        val nrows = argMap("nrows").split(" ").map(x => x.toInt)
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val fixedAxis = argMap("fixedAxis").toInt
-        val nproc = argMap.get("nproc")
+def init_scidb(nproc, debug=False, stub=''):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
 
-        val stub = "/tests/SimpleMatrixOps (Single Node Dense)/output/"
-        val base = nproc match {
-            case Some(np) => s"mllib_cpu_${opType}_scale.txt"
-            case None => s"mllib_${mattype}_${opType}.txt"
-        }
-        val path = root + stub + base
-        
-        if (!Files.exists(Paths.get(path)))
-            File(path).writeAll("rows,time1,time2,time3,time4,time5\n")
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
 
-        for (nr <- nrows) {
-            val nrow = opType match {
-                case "GMM" => fixedAxis
-                case _     => nr
-            }
-            val ncol = opType match {
-                case "GMM" => nr
-                case _     => fixedAxis
-            }
-            val major_axis = opType match {
-                case "GMM" => ncol
-                case _     => nrow
-            }
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
+    else:
+        stdout = open('scidb{}.out'.format(stub), 'w')
+        stderr = open('scidb{}.err'.format(stub), 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(int(nproc)-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-            val M = as_dense(Matrices.rand(nrow, ncol, new Random()))
-            val N = opType match {
-                case "GMM" => as_dense(Matrices.rand(ncol, nrow, new Random()))
-                case "ADD" => as_dense(Matrices.rand(nrow, ncol, new Random()))
-                case _     => as_dense(Matrices.rand(1, 1, new Random()))
-            }
-            val v = opType match {
-                case "MVM" => vectorize(Matrices.rand(ncol, 1, new Random()))
-                case _     => vectorize(Matrices.rand(1, 1, new Random()))
-            }
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    cxn.iquery(stmt)
 
-            val times = Array[Double](0,0,0,0,0)
-            for (ix <- 0 to 4) {
-                println(s"Test => ${ix}")
-                val start = System.nanoTime()
+def alloc_matrix(rows, cols, name, 
+        cxn, method='(RANDOM() % 100) / 10.0',
+        chunksize=1000):
+    stmt = """
+        store(build(<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(r=rows, c=cols, cz=chunksize, m=method, n=name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val action = opType match {
-                    case "TRANS" => do_trans( M )
-                    case "NORM"  => do_norm( M )
-                    case "GMM"   => do_gmm( M, N )
-                    case "MVM"   => do_mvm( M, v )
-                    case "TSM"   => do_tsm( M )
-                    case "ADD"   => do_add( M, N )
-                    case _       => throw new Exception("Invalid Operator")
-                }
+def alloc_vector(length, name, cxn, method='(RANDOM() % 100) / 10.0'):
+    stmt = """
+        store(build(<val:double>[row=0:{};col=0:0], {}), {})
+    """.format(length, method, name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val stop = System.nanoTime()
-                times(ix) = (stop - start) / 1e9
-            }
-            val pref = nproc match {
-                case Some(np) => s"${np}"
-                case None     => s"${nr}"
-            }
-            File(path).appendAll(s"${pref}"+","+times.mkString(",")+'\n')
-        } 
-    }
+def time_stmt(stmt, cxn, cleanup=None, n_reps=5):
+    times = []
+    cleanup = cleanup if cleanup is not None else []
+    for ix in range(n_reps):
+        if ix == 0:
+            print stmt
+        start = time.time()
+        cxn.iquery(stmt)
+        stop = time.time()
+        print 'Test {} => {}'.format(ix, stop-start)
+        if len(cleanup) > 0:
+            for obj in cleanup:
+                cxn.iquery('remove({})'.format(obj))
+        times.append(stop-start)
+    return times
 
-    def do_trans(M: DenseMatrix) {
-        return M.transpose
-    }
+if __name__=='__main__':
+    argv = parse_cmd_args(sys.argv[1:])
+    do_matrix_op(argv)
 
-    def do_norm(M: DenseMatrix) {
-        return M.toArray.map(x => pow(x, 2)).sum
-    }
+Running: taskset -c 0-23 python _scidb_matrix_ops.py opType=TSM mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=8
 
-    def do_gmm(M: DenseMatrix, N: DenseMatrix) {
-        return M.multiply( N )
-    }
-
-    def do_tsm(M: DenseMatrix) {
-        return M.transpose.multiply( M )
-    }
-
-    def do_add(M: DenseMatrix, N: DenseMatrix) {
-        return from_breeze( as_breeze( M ) + as_breeze( N ) )
-    }
-
-    def do_mvm(M: DenseMatrix, v: DenseVector) {
-        return M.multiply( v )
-    }
-
-        // Spark annoyingly does not expose any of these primitive methods
-    // which makes their library not very useful
-    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
-        case v: linalg.SparseVector =>
-            return new bSparseVector[Double](v.indices, v.values, v.size)
-        case v: linalg.DenseVector  =>
-            return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
-        case v: bSparseVector[Double] =>
-            return Vectors.sparse(v.length, v.activeIterator.toSeq)
-        case v: bDenseVector[Double] =>
-            return Vectors.dense(v.data)
-    }
-
-    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
-        case m: linalg.DenseMatrix =>
-            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-        case m: linalg.SparseMatrix =>
-            return new bSparseMatrix(
-                m.values, m.numRows, m.numCols,
-                m.colPtrs, m.numActives, m.rowIndices)
-    }
-
-    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
-        case m: bDenseMatrix[Double] =>
-            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
-        case m: bSparseMatrix[Double] =>
-            return Matrices.sparse(m.rows, m.cols,
-                    m.colPtrs, m.rowIndices, m.data)
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense(M.toArray) )
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    } 
-}
-
-Running: taskset -c 0-7 spark-submit --class MLLibMatrixOps  --driver-cores 8   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=ADD mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=8
-
-CPU count capped at: 8
+CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
-./mllib/src/main/scala/mllib_matrix_ops.scala
-================================================================================
-import scala.math._
-import java.nio.file.{Paths, Files}
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.spark.sql._
-import scala.tools.nsc.io._
-import java.util.Random
-import org.apache.spark.mllib.linalg._
-import org.apache.spark.mllib.linalg
-import breeze.{linalg => bAlg, numerics => bNum}
-import breeze.linalg.{Vector => bVector,
-                      Matrix => bMatrix,
-                      SparseVector => bSparseVector,
-                      DenseVector => bDenseVector,
-                      CSCMatrix => bSparseMatrix,
-                      DenseMatrix => bDenseMatrix}
+# Copyright 2018 Anthony H Thomas and Arun Kumar
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#     http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-object MLLibMatrixOps extends App {
+with open(__file__) as fh: print fh.read()
+import os
+import sys
+import time
+import atexit
+import scidbpy
+import subprocess
 
-    override def main(args: Array[String]) {
-        val conf = new SparkConf().setAppName("MLLibMatrixOps")
-        val sc = new SparkContext(conf)
-        val root = sys.env("BENCHMARK_PROJECT_ROOT")
+import numpy as np
+import pandas as pd
+
+ROOT = os.getenv('BENCHMARK_PROJECT_ROOT')
+if (ROOT is None):
+    msg = 'Please set environment variable BENCHMARK_PROJECT_ROOT'
+    raise StandardError(msg)
+
+sys.path.append(os.path.join(ROOT,'lib','python'))
+from np_timing_utils import parse_cmd_args
+
+def do_matrix_op(kwargs):
+    op_type = kwargs.get('opType')
+    mattype = kwargs.get('mattype')
+    fixed_axis = int(kwargs.get('fixedAxis'))
+    nrow_scale = map(lambda x: int(x), kwargs['nrows'].split(' '))
+    nproc = kwargs.get('nproc', None)
+
+    if nproc is None:
+        path = os.path.join(
+            '..','output','scidb_{}_{}.txt'.format(mattype, op_type))
+    else:
+        path = os.path.join(
+            '..','output','scidb_cpu_{}_{}.txt'.format(mattype, op_type))
+    
+    num_procs = nproc if nproc is not None else 24
+    atexit.register(terminate_scidb)
+    P, stdout, stderr = init_scidb(num_procs, debug=True, stub=op_type)
+
+    cxn = scidbpy.connect()
+    print cxn.iquery("list('instances')", fetch=True)
+    colnames = ['rows','time1','time2','time3','time4','time5']
+    run_times = pd.DataFrame(np.zeros((1,len(colnames))))
+    run_times.columns = colnames
+
+    for nr in nrow_scale:
+        nrow = fixed_axis if op_type == 'GMM' else nr
+        ncol = nr if op_type == 'GMM' else fixed_axis
+
+        M_name = 'M{}{}'.format(nrow, ncol)
+        if not M_name in dir(cxn.arrays):
+            alloc_matrix(nrow, ncol, M_name, cxn)
+        if op_type == 'GMM':
+            if not 'N{}{}'.format(ncol, nrow) in dir(cxn.arrays):
+                alloc_matrix(ncol, nrow, 'N{}{}'.format(ncol, nrow), cxn)
+            N_name = 'N{}{}'.format(ncol, nrow)
+            zv_name = 'ZEROS{}{}'.format(nrow, nrow)
+            zeros(nrow, nrow, zv_name, cxn)
+        if op_type == 'TSM':
+            zv_name = 'ZEROS{}{}'.format(ncol, ncol)
+            zeros(ncol, ncol, zv_name, cxn)
+        if op_type == 'ADD':
+            if not 'N{}{}'.format(nrow, ncol) in dir(cxn.arrays):
+                alloc_matrix(nrow, ncol, 'N{}{}'.format(nrow, ncol), cxn)
+            N_name = 'N{}{}'.format(nrow, ncol)
+        if op_type == 'MVM':
+            v_name = 'v{}'.format(fixed_axis)
+            if not v_name in dir(cxn.arrays):
+                alloc_vector(fixed_axis, v_name, cxn)
+            zv_name = 'ZEROS{}'.format(nrow)
+            zeros(nrow, 0, zv_name, cxn)
+
+        cxn.iquery("load_library('dense_linear_algebra')")
+        if op_type == 'TRANS':
+            call = 'consume(transpose({}))'.format(M_name)
+        elif op_type == 'NORM':
+            call = 'aggregate(apply({}, val2, pow(val,2.0)), sum(val2))'.format(
+                M_name)
+        elif op_type == 'GMM':
+            call = 'gemm({},{},{})'.format(M_name, N_name, zv_name)
+        elif op_type == 'MVM':
+            call = 'gemm({},{},{})'.format(M_name, v_name, zv_name)
+        elif op_type == 'TSM':
+            call = 'gemm({},{},{}, transa:true)'.format(M_name, M_name, zv_name)
+        elif op_type == 'ADD':
+            call = 'consume(apply(join({0},{1}), sum, {0}.val+{1}.val))'.format(
+                M_name, N_name)
+        else:
+            raise StandardError('Invalid operator type')
         
-        val argMap = Map[String,String](
-                args.map(_.split("=")).map({
-                    case Array(x,y) => (x -> y)
-                }):_*
-            )
+        run_times.loc[:,'rows'] = nr if nproc is None else nproc
+        run_times.ix[:,1:] = time_stmt(call, cxn)
+        write_header = False if (os.path.exists(path)) else True
+        run_times.to_csv(path, index=False, header=write_header, mode='a')
+        P.terminate()
+        stdout.close()
+        stderr.close()
 
-        val nrows = argMap("nrows").split(" ").map(x => x.toInt)
-        val mattype = argMap("mattype")
-        val opType = argMap("opType")
-        val fixedAxis = argMap("fixedAxis").toInt
-        val nproc = argMap.get("nproc")
+def init_scidb(nproc, debug=False, stub=''):
+    # just in case there happens to be another container running
+    call = 'docker container stop scidb-container'
+    os.system(call)
+    os.system('docker system prune -f')
 
-        val stub = "/tests/SimpleMatrixOps (Single Node Dense)/output/"
-        val base = nproc match {
-            case Some(np) => s"mllib_cpu_${opType}_scale.txt"
-            case None => s"mllib_${mattype}_${opType}.txt"
-        }
-        val path = root + stub + base
-        
-        if (!Files.exists(Paths.get(path)))
-            File(path).writeAll("rows,time1,time2,time3,time4,time5\n")
+    call = ('docker run --tty --name scidb-container -v /dev/shm '
+            '--tmpfs /dev/shm:rw,nosuid,nodev,exec,size=90g '
+            '-p 8080:8080 athomas9t/scidb:v4')
 
-        for (nr <- nrows) {
-            val nrow = opType match {
-                case "GMM" => fixedAxis
-                case _     => nr
-            }
-            val ncol = opType match {
-                case "GMM" => nr
-                case _     => fixedAxis
-            }
-            val major_axis = opType match {
-                case "GMM" => ncol
-                case _     => nrow
-            }
+    print call
+    if not debug:
+        stdout = open(os.devnull, 'w')
+        stderr = open(os.devnull, 'w')
+    else:
+        stdout = open('scidb{}.out'.format(stub), 'w')
+        stderr = open('scidb{}.err'.format(stub), 'w')
+    P = subprocess.Popen(call, shell=True, stdout=stdout, stderr=stderr)
+    time.sleep(10)
+    call = "docker exec -it scidb-container sh -c \"sed -i 's/server-0=127.0.0.1,23/server-0=127.0.0.1,{}/g' /opt/scidb/18.1/etc/config.ini\"".format(int(nproc)-1)
+    print call
+    os.system(call)
+    os.system('./docker-start.sh')
+    return P, stdout, stderr
+    
+def terminate_scidb():
+    call = 'docker container stop scidb-container'
+    os.system(call)
 
-            val M = as_dense(Matrices.rand(nrow, ncol, new Random()))
-            val N = opType match {
-                case "GMM" => as_dense(Matrices.rand(ncol, nrow, new Random()))
-                case "ADD" => as_dense(Matrices.rand(nrow, ncol, new Random()))
-                case _     => as_dense(Matrices.rand(1, 1, new Random()))
-            }
-            val v = opType match {
-                case "MVM" => vectorize(Matrices.rand(ncol, 1, new Random()))
-                case _     => vectorize(Matrices.rand(1, 1, new Random()))
-            }
+def zeros(rows, cols, name, cxn, chunksize=1000, overwrite=True):
+    if overwrite and (name in dir(cxn.arrays)):
+        cxn.iquery('remove({})'.format(name))
+    stmt = """
+        CREATE ARRAY {n}<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}]
+    """.format(r=rows, n=name, c=cols, cz=chunksize)
+    cxn.iquery(stmt)
 
-            val times = Array[Double](0,0,0,0,0)
-            for (ix <- 0 to 4) {
-                println(s"Test => ${ix}")
-                val start = System.nanoTime()
+def alloc_matrix(rows, cols, name, 
+        cxn, method='(RANDOM() % 100) / 10.0',
+        chunksize=1000):
+    stmt = """
+        store(build(<val:double>[row=0:{r}:0:{cz};col=0:{c}:0:{cz}], {m}), {n})
+    """.format(r=rows, c=cols, cz=chunksize, m=method, n=name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val action = opType match {
-                    case "TRANS" => do_trans( M )
-                    case "NORM"  => do_norm( M )
-                    case "GMM"   => do_gmm( M, N )
-                    case "MVM"   => do_mvm( M, v )
-                    case "TSM"   => do_tsm( M )
-                    case "ADD"   => do_add( M, N )
-                    case _       => throw new Exception("Invalid Operator")
-                }
+def alloc_vector(length, name, cxn, method='(RANDOM() % 100) / 10.0'):
+    stmt = """
+        store(build(<val:double>[row=0:{};col=0:0], {}), {})
+    """.format(length, method, name)
+    print stmt
+    cxn.iquery(stmt)
 
-                val stop = System.nanoTime()
-                times(ix) = (stop - start) / 1e9
-            }
-            val pref = nproc match {
-                case Some(np) => s"${np}"
-                case None     => s"${nr}"
-            }
-            File(path).appendAll(s"${pref}"+","+times.mkString(",")+'\n')
-        } 
-    }
+def time_stmt(stmt, cxn, cleanup=None, n_reps=5):
+    times = []
+    cleanup = cleanup if cleanup is not None else []
+    for ix in range(n_reps):
+        if ix == 0:
+            print stmt
+        start = time.time()
+        cxn.iquery(stmt)
+        stop = time.time()
+        print 'Test {} => {}'.format(ix, stop-start)
+        if len(cleanup) > 0:
+            for obj in cleanup:
+                cxn.iquery('remove({})'.format(obj))
+        times.append(stop-start)
+    return times
 
-    def do_trans(M: DenseMatrix) {
-        return M.transpose
-    }
+if __name__=='__main__':
+    argv = parse_cmd_args(sys.argv[1:])
+    do_matrix_op(argv)
 
-    def do_norm(M: DenseMatrix) {
-        return M.toArray.map(x => pow(x, 2)).sum
-    }
+Running: taskset -c 0-23 python _scidb_matrix_ops.py opType=TSM mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=16
 
-    def do_gmm(M: DenseMatrix, N: DenseMatrix) {
-        return M.multiply( N )
-    }
-
-    def do_tsm(M: DenseMatrix) {
-        return M.transpose.multiply( M )
-    }
-
-    def do_add(M: DenseMatrix, N: DenseMatrix) {
-        return from_breeze( as_breeze( M ) + as_breeze( N ) )
-    }
-
-    def do_mvm(M: DenseMatrix, v: DenseVector) {
-        return M.multiply( v )
-    }
-
-        // Spark annoyingly does not expose any of these primitive methods
-    // which makes their library not very useful
-    def as_breeze(v: linalg.Vector) : bVector[Double] = v match {
-        case v: linalg.SparseVector =>
-            return new bSparseVector[Double](v.indices, v.values, v.size)
-        case v: linalg.DenseVector  =>
-            return new bDenseVector[Double](v.values)
-    }
-
-    def from_breeze(v: bVector[Double]) : linalg.Vector = v match {
-        case v: bSparseVector[Double] =>
-            return Vectors.sparse(v.length, v.activeIterator.toSeq)
-        case v: bDenseVector[Double] =>
-            return Vectors.dense(v.data)
-    }
-
-    def as_breeze(m: linalg.Matrix) : bMatrix[Double] = m match {
-        case m: linalg.DenseMatrix =>
-            return new bDenseMatrix(m.numRows, m.numCols, m.toArray)
-        case m: linalg.SparseMatrix =>
-            return new bSparseMatrix(
-                m.values, m.numRows, m.numCols,
-                m.colPtrs, m.numActives, m.rowIndices)
-    }
-
-    def from_breeze(m: bMatrix[Double]) : linalg.Matrix = m match {
-        case m: bDenseMatrix[Double] =>
-            return Matrices.dense(m.rows, m.cols, m.toDenseMatrix.data)
-        case m: bSparseMatrix[Double] =>
-            return Matrices.sparse(m.rows, m.cols,
-                    m.colPtrs, m.rowIndices, m.data)
-    }
-
-    def as_dense(M: Matrix) : DenseMatrix = {
-        return M.asInstanceOf[DenseMatrix]
-    }
-
-    def vectorize(M: Matrix) : DenseVector = {
-        return as_dense( Vectors.dense(M.toArray) )
-    }
-
-    def as_dense(v: Vector) : DenseVector = {
-        return v.asInstanceOf[DenseVector]
-    } 
-}
-
-Running: taskset -c 0-15 spark-submit --class MLLibMatrixOps  --driver-cores 16   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar opType=ADD mattype=tall nrows="20000000" fixedAxis=100 step=10 nproc=16
-
-CPU count capped at: 16
+CPU count capped at: 24
 Memory use capped at: -1e-09GB
 CPU Time capped at: -1 seconds
 
- make.py ended: 2018-01-27 21:09:36
+ make.py ended: 2018-06-06 23:29:30

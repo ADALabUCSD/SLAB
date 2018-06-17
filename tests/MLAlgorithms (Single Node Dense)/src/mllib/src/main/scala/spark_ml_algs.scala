@@ -118,7 +118,7 @@ object SparkMLAlgorithms {
                 as_breeze( y ) - bNum.sigmoid( as_breeze( xb )))
             val delta = as_breeze(
                 X.transpose.multiply(eps)):*(stepSize/N.toDouble)
-            w = from_breeze( as_breeze( w ) - delta )
+            w = from_breeze( as_breeze( w ) + delta )
             iteration = iteration + 1
         }
 

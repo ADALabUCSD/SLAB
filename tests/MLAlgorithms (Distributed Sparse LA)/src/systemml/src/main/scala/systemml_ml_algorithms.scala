@@ -272,7 +272,7 @@ object SystemMLMLAlgorithms extends App {
     }
 
     def readParquet(path: String, spark: SparkSession) : (DataFrame, DataFrame) = {
-        val M = spark.read.parquet(path).repartition(1000).sample(true, 0.00001)
+        val M = spark.read.parquet(path).repartition(1000)
         M.persist(MEMORY_AND_DISK_SER)
 
         val X = M.select("features")

@@ -1,0 +1,51 @@
+[info] Loading project definition from /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Sparse LA)/src/systemml/project
+[info] Set current project to SystemMLAlgs (in build file:/home/ubuntu/SLAB/tests/MLAlgorithms%20(Distributed%20Sparse%20LA)/src/systemml/)
+[info] Including from cache: SystemML.jar
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/DEPENDENCIES' with strategy 'discard'
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.antlr/antlr4-runtime/pom.xml' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.properties' with strategy 'discard'
+[warn] Merging 'META-INF/maven/org.apache.systemml/systemml/pom.xml' with strategy 'discard'
+[warn] Strategy 'discard' was applied to 6 files
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Sparse LA)/src/systemml/target/scala-2.10/SystemMLAlgs-assembly-0.1.jar
+[success] Total time: 4 s, completed Apr 15, 2018 1:09:20 AM
+[info] Loading project definition from /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Sparse LA)/src/mllib/project
+[info] Set current project to MLLibAlgs (in build file:/home/ubuntu/SLAB/tests/MLAlgorithms%20(Distributed%20Sparse%20LA)/src/mllib/)
+[info] Including from cache: scala-library-2.10.4.jar
+[info] Checking every *.class/*.jar file's SHA-1.
+[info] Merging files...
+[warn] Merging 'META-INF/MANIFEST.MF' with strategy 'discard'
+[warn] Strategy 'discard' was applied to a file
+[info] Assembly up to date: /home/ubuntu/SLAB/tests/MLAlgorithms (Distributed Sparse LA)/src/mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar
+[success] Total time: 2 s, completed Apr 15, 2018 1:09:28 AM
+-rw-r--r--   1 ubuntu supergroup         77 2018-04-12 04:38 /scratch/pass.csv
+READING PARQUET
+174307199
+NUM PARTITIONS
+1024
+1916262
+Test => 0
+--------> REG <---------
+Writing 0 of 1.0 chunks
+WARNING: File exists. No data copied
+Running: spark-submit --class SparkMLAlgorithms 
+
+
+ --driver-memory 20G 
+
+  
+./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar mattype=adclick Xpath=/scratch/pass.csv Ypath=/scratch/pass.csv passPath=/scratch/pass.csv dataPath=/scratch/adclick_clean_1_sparse.parquet nodes=2 opType=reg
+Running: spark-submit --class SparkMLAlgorithms  --driver-memory 20G   ./mllib/target/scala-2.10/MLLibAlgs-assembly-0.1.jar mattype=adclick Xpath=/scratch/pass.csv Ypath=/scratch/pass.csv passPath=/scratch/pass.csv dataPath=/scratch/adclick_clean_1_sparse.parquet nodes=2 opType=reg
+Cleared: ../temp
+Cleared: ../external
+
+Start log file:  ../output/make.log
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: sbt -Dsbt.log.noformat=true assembly 
+Running: python _run_criteo_tests.py _1 2 "MLLIB" "reg"
+
+End log file:  ../output/make.log
